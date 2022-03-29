@@ -1,4 +1,4 @@
-import { ajv } from "./validation";
+import { ajv } from "./utils";
 
 /**
  * The word separator symbol.
@@ -90,16 +90,19 @@ const patternSchema = {
       type: "object",
       properties: { and: { type: "array" } },
       additionalProperties: false,
+      required: ["and"],
     },
     {
       type: "object",
       properties: { or: { type: "array" } },
       additionalProperties: false,
+      required: ["or"],
     },
     {
       type: "object",
       properties: { not: { anyOf: [{ type: "string" }, { type: "object" }] } },
       additionalProperties: false,
+      required: ["not"],
     },
   ],
 };
@@ -112,8 +115,8 @@ const validatePatternSurface = ajv.compile(patternSchema);
 /**
  * Validate a pattern fully.
  *
- * @param pattern A pattern object.
- * @return Whether the given pattern is valid.
+ * @param thing A pattern object.
+ * @returns Whether the given pattern object is valid.
  */
 export const isValidPattern = (thing: unknown): boolean => {
   if (!validatePatternSurface(thing)) {
