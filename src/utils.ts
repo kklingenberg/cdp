@@ -26,8 +26,13 @@ export const getSignature = (...args: unknown[]): Promise<string> =>
       }
     });
     hash.on("error", reject);
-    args.forEach((arg) => hash.write(JSON.stringify(arg)));
-    hash.end();
+    try {
+      args.forEach((arg) => hash.write(JSON.stringify(arg)));
+    } catch (err) {
+      reject(err);
+    } finally {
+      hash.end();
+    }
   });
 
 /**
