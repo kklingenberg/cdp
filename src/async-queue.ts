@@ -66,8 +66,9 @@ export class AsyncQueue<Type> {
   }
 
   /**
-   * A queue can be closed to prevent it from unblocking. A closed
-   * queue will keep yielding elements if it's non-empty, though.
+   * A queue can be closed to prevent it from blocking, or receiving
+   * additional pushes. A closed queue will keep yielding elements if
+   * it's non-empty, though.
    */
   close(): void {
     this.closed = true;
