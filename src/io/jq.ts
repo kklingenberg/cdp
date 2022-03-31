@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from "child_process";
 import { accessSync, constants, statSync } from "fs";
+import { Channel } from "../async-queue";
 import { PATH } from "../conf";
 import { parse } from "./read-stream";
 
@@ -60,18 +61,17 @@ const wrapJqProgram = (program: string): string => `try (${program})`;
 
 /**
  * Establishes a connection to a fresh jq process, communicating with
- * JSON-encoded values. Returns a pair of values: the first one is a
+ * JSON-encoded values. Returns a channel: a structure with a send
  * function that receives a list of JSON-encodable values and sends
- * them to the jq program; the second one is an async generator that
- * will emit the transformed values emitted by jq.
+ * them to the jq program, and an async generator that will emit the
+ * transformed values emitted by jq.
  *
  * @param program The jq program to use.
- * @returns A promise yielding a pair: a sender function and an async
- * generator.
+ * @returns A promise yielding a channel.
  */
-export const makeSendReceive = async (
+export const makeChannel = async (
   program: string
-): Promise<[(...values: unknown[]) => void, AsyncGenerator<unknown>]> => {
+): Promise<Channel<unknown, unknown>> => {
   const path = getJqPath();
   if (path === null) {
     throw new Error(
@@ -99,10 +99,10 @@ export const makeSendReceive = async (
     onError(err);
   });
   await precondition;
-  const sender = (...values: unknown[]): void => {
+  const send = (...values: unknown[]): void => {
     values.forEach((value) => {
       child.stdin.write(JSON.stringify(value) + "\n");
     });
   };
-  return [sender, parse(child.stdout)];
+  return { send, receive: parse(child.stdout) };
 };

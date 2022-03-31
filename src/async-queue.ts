@@ -6,6 +6,15 @@ import { makeLogger } from "./utils";
 const logger = makeLogger("async-queue");
 
 /**
+ * A channel is a thing that an agent can use to communicate with
+ * another agent.
+ */
+export interface Channel<SendType, ReceiveType> {
+  send: (...values: SendType[]) => void;
+  receive: AsyncGenerator<ReceiveType>;
+}
+
+/**
  * A queue class that resolves a shift() call only when there's
  * elements in the queue.
  */
@@ -91,5 +100,15 @@ export class AsyncQueue<Type> {
       });
     }
     return value;
+  }
+
+  /**
+   * Return a channel representation for this queue.
+   */
+  asChannel(): Channel<Type, Type> {
+    return {
+      send: (...values) => values.forEach((v) => this.push(v)),
+      receive: this.iterator(),
+    };
   }
 }

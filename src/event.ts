@@ -1,3 +1,4 @@
+import { Channel } from "./async-queue";
 import { ajv, getSignature, makeLogger } from "./utils";
 import { isValidEventName } from "./pattern";
 
@@ -277,4 +278,32 @@ export const parseVector = async (
     }
   }
   return events;
+};
+
+/**
+ * Applies the given parser to the channel, returning a new channel
+ * that produces events.
+ *
+ * @param channel The channel to apply the parser to.
+ * @param parser The parser to use.
+ * @param context An informational context for error messages.
+ * @returns A new channel that produces events.
+ */
+export const parseChannel = <T>(
+  channel: Channel<T, unknown>,
+  parser: (raw: unknown) => Promise<Event>,
+  context?: string
+): Channel<T, Event> => {
+  async function* receiver() {
+    for await (const raw of channel.receive) {
+      for (const event of await parseVector(
+        raw,
+        parser,
+        context ?? "parsing channel"
+      )) {
+        yield event;
+      }
+    }
+  }
+  return { send: channel.send, receive: receiver() };
 };

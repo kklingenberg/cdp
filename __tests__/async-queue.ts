@@ -92,3 +92,15 @@ test("Closing a queue prevents pushes", async () => {
   expect(values).toEqual(pushedValues);
   expect(remainderValues).toEqual([]);
 });
+
+test("A queue can be used as a channel", async () => {
+  const queue = new AsyncQueue<number>();
+  const { send, receive } = queue.asChannel();
+  send(1, 2, 3);
+  const { value: first } = await receive.next();
+  const { value: second } = await receive.next();
+  const { value: third } = await receive.next();
+  expect(first).toEqual(1);
+  expect(second).toEqual(2);
+  expect(third).toEqual(3);
+});

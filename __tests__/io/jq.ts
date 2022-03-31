@@ -1,11 +1,11 @@
-import { closeInstances, makeSendReceive } from "../../src/io/jq";
+import { closeInstances, makeChannel } from "../../src/io/jq";
 
 afterEach(() => {
   closeInstances();
 });
 
 test("Integration with jq works as expected", async () => {
-  const [send, receive] = await makeSendReceive(`{key: join(" ")}`);
+  const { send, receive } = await makeChannel(`{key: join(" ")}`);
   send(["foo", "bar", "baz"], ["lorem", "ipsum"]);
   const { value: first } = await receive.next();
   const { value: second } = await receive.next();
@@ -14,7 +14,7 @@ test("Integration with jq works as expected", async () => {
 });
 
 test("Failures during processing interrupt parsing of the current payload", async () => {
-  const [send, receive] = await makeSendReceive(`.[] | (1 / .)`);
+  const { send, receive } = await makeChannel(`.[] | (1 / .)`);
   send([0.5, 0, 0.25], [0.5, 0.25]);
   const { value: first } = await receive.next();
   const { value: second } = await receive.next();
