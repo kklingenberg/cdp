@@ -63,7 +63,7 @@ const validateSerializedEvent = ajv.compile(serializedEventSchema);
  * An event is the smallest unit of data processable in CDP. It's a
  * wrapper around a variant-typed data packet.
  */
-class Event {
+export class Event {
   /**
    * The event's name, most commonly the name of an event series.
    */

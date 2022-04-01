@@ -42,6 +42,18 @@ export class AsyncQueue<Type> {
   };
 
   /**
+   * A promise that resolves once the queue is closed and empty.
+   */
+  drain: Promise<void>;
+
+  /**
+   * Resolves the drain promise.
+   */
+  notifyDrained: () => void = () => {
+    throw new Error("notifyDrained is not properly initialized");
+  };
+
+  /**
    * Asynchronously iterate over this queue's elements.
    */
   iterator: () => AsyncGenerator<Type>;
@@ -49,6 +61,9 @@ export class AsyncQueue<Type> {
   constructor() {
     this.lock = new Promise((resolve) => {
       this.releaseLock = resolve;
+    });
+    this.drain = new Promise((resolve) => {
+      this.notifyDrained = resolve;
     });
     this.iterator = async function* () {
       while (true) {
@@ -82,6 +97,9 @@ export class AsyncQueue<Type> {
   close(): void {
     this.closed = true;
     this.releaseLock();
+    if (this.data.length === 0) {
+      this.notifyDrained();
+    }
   }
 
   /**
@@ -98,6 +116,8 @@ export class AsyncQueue<Type> {
       this.lock = new Promise((resolve) => {
         this.releaseLock = resolve;
       });
+    } else if (this.data.length === 0 && this.closed) {
+      this.notifyDrained();
     }
     return value;
   }

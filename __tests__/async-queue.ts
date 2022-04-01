@@ -104,3 +104,19 @@ test("A queue can be used as a channel", async () => {
   expect(second).toEqual(2);
   expect(third).toEqual(3);
 });
+
+test("A queue's drain promise won't resolve if the queue isn't closed", async () => {
+  const queue = new AsyncQueue<boolean>();
+  let drained;
+  drained = await Promise.race([
+    queue.drain.then(() => true),
+    new Promise((resolve) => setTimeout(resolve, 1, false)),
+  ]);
+  expect(drained).toBe(false);
+  queue.close();
+  drained = await Promise.race([
+    queue.drain.then(() => true),
+    new Promise((resolve) => setTimeout(resolve, 1, false)),
+  ]);
+  expect(drained).toBe(true);
+});

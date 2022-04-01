@@ -24,3 +24,13 @@ export const PARSE_BUFFER_SIZE: number = parseInt(
 export const PATH: string[] = (process.env.PATH ?? "")
   .split(":")
   .filter((p) => p.length > 0);
+
+/**
+ * Queue draining grace period: the maximum amount of time to wait for
+ * external processing to finish doing what it needs to. Measured in
+ * milliseconds.
+ */
+export const QUEUE_DRAIN_GRACE_PERIOD: number = parseInt(
+  process.env.QUEUE_DRAIN_GRACE_PERIOD ?? "10",
+  10
+);
