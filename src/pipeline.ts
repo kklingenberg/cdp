@@ -36,20 +36,83 @@ export interface Pipeline {
 export const INPUT_ALIAS = "$input";
 
 /**
+ * Verifies that the given pipeline is proper. Throws an error if it
+ * isn't.
+ *
+ * The checks performed are four:
+ * - That no step has a name equal to the input alias.
+ * - That every step has a unique name within the pipeline.
+ * - That no step has dependencies that don't refer to another step or
+ *   are the input alias.
+ * - That the graph formed by the dependency edges doesn't have
+ *   cycles.
+ * Any failure to meet those restrictions is reported with an
+ * explanation message in the thrown error's message property.
+ *
+ * @param pipeline The pipeline to check.
+ */
+export const validate = (pipeline: Pipeline): void => {
+  if (pipeline.steps.some(({ name }) => name === INPUT_ALIAS)) {
+    throw new Error(
+      `at least one pipeline step is using the reserved name '${INPUT_ALIAS}'`
+    );
+  }
+  const stepMap: Map<string, string[]> = new Map(
+    pipeline.steps.map((step) => [step.name, step.after])
+  );
+  if (stepMap.size < pipeline.steps.length) {
+    throw new Error("the pipeline step names are not unique");
+  }
+  stepMap.set(INPUT_ALIAS, []);
+  for (const step of pipeline.steps) {
+    for (const stepDependency of step.after) {
+      if (!stepMap.has(stepDependency)) {
+        throw new Error(
+          `the pipeline step '${step.name}' ` +
+            `has a dangling dependency reference '${stepDependency}'`
+        );
+      }
+    }
+  }
+  const checkedSteps: Set<string> = new Set();
+  const check = (step: string, tail: string[]): void => {
+    if (checkedSteps.has(step)) {
+      return;
+    }
+    if (tail.includes(step)) {
+      throw new Error(
+        `the pipeline steps form a dependency cycle: ${tail.join(
+          " --> "
+        )} --> ${step}`
+      );
+    }
+    const dependencies = stepMap.get(step) ?? [];
+    for (const dependentStep of dependencies) {
+      check(dependentStep, [...tail, step]);
+    }
+    checkedSteps.add(step);
+  };
+  for (const { name } of pipeline.steps) {
+    check(name, []);
+  }
+};
+
+/**
  * Runs a pipeline. Returns a pair containing the promise to await for
  * the pipeline to finish, and a function that can be called to finish
- * it and clean resources. If the given pipeline contains an improper
- * DAG this function behaves incorrectly (e.g. the closing procedure
- * might not terminate). An improper DAG could be one that has cycles
- * in it, or dangling references.
+ * it and clean resources. If the pipeline contains an improper DAG
+ * (e.g. with cycles or dangling references), this procedure throws an
+ * error.
  *
- * @param pipeline The pipeline to run, assumed to be a proper DAG.
+ * @param pipeline The pipeline to run.
  * @returns A promise yielding a pair of the pipeline promise and a
  * finishing function, that schedules the end of the pipeline.
  */
 export const run = async (
   pipeline: Pipeline
 ): Promise<[Promise<void>, () => Promise<void>]> => {
+  // Ensure the pipeline is proper.
+  validate(pipeline);
   // Translate steps into integers for lighter event annotations.
   const inputNodeIndex = -1;
   const stepTranslation = new Map(
