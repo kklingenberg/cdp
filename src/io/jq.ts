@@ -99,10 +99,23 @@ export const makeChannel = async (
     onError(err);
   });
   await precondition;
-  const send = (...values: unknown[]): void => {
-    values.forEach((value) => {
-      child.stdin.write(JSON.stringify(value) + "\n");
-    });
+  const send = (...values: unknown[]): boolean => {
+    try {
+      values.forEach((value) => {
+        child.stdin.write(JSON.stringify(value) + "\n");
+      });
+      return true;
+    } catch (err) {
+      return false;
+    }
   };
-  return { send, receive: parse(child.stdout) };
+  return {
+    send,
+    receive: parse(child.stdout),
+    close: async () => {
+      if (child.kill() && typeof child.pid !== "undefined") {
+        instances.delete(child.pid);
+      }
+    },
+  };
 };

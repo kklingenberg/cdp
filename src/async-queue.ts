@@ -10,8 +10,9 @@ const logger = makeLogger("async-queue");
  * another agent.
  */
 export interface Channel<SendType, ReceiveType> {
-  send: (...values: SendType[]) => void;
+  send: (...values: SendType[]) => boolean;
   receive: AsyncGenerator<ReceiveType>;
+  close: () => Promise<void>;
 }
 
 /**
@@ -127,8 +128,97 @@ export class AsyncQueue<Type> {
    */
   asChannel(): Channel<Type, Type> {
     return {
-      send: (...values) => values.forEach((v) => this.push(v)),
+      send: (...values) =>
+        values.map((v) => this.push(v)).every((result) => result),
       receive: this.iterator(),
+      close: async () => {
+        this.close();
+        await this.drain;
+      },
     };
   }
 }
+
+/**
+ * Transforms a channel into another channel through a mapping
+ * function.
+ *
+ * @param fn The function that transforms each received element.
+ * @param channel The channel to transform.
+ * @returns The transformed channel.
+ */
+export const flatMap = <A, B, C>(
+  fn: (x: B) => Promise<C[]>,
+  channel: Channel<A, B>
+): Channel<A, C> => {
+  async function* receiver() {
+    for await (const b of channel.receive) {
+      for (const c of await fn(b)) {
+        yield c;
+      }
+    }
+  }
+  return {
+    send: channel.send,
+    receive: receiver(),
+    close: channel.close.bind(channel),
+  };
+};
+
+/**
+ * Composes channels as if using the function composition
+ * combinator: compose(f, g)(x) = f(g(x))
+ *
+ * @param c1 The channel that receives data from the other channel.
+ * @param c2 The channel that sends data to the other channel.
+ * @returns The resulting channel.
+ */
+export const compose = <A, B, C>(
+  c1: Channel<B, C>,
+  c2: Channel<A, B>
+): Channel<A, C> => {
+  async function* composed() {
+    let finished1 = false;
+    let finished2 = false;
+    const eventSlice: [
+      Promise<{ x: IteratorResult<B | C>; yields: boolean }>,
+      Promise<{ x: IteratorResult<B | C>; yields: boolean }>
+    ] = [
+      c1.receive.next().then((x) => ({ x, yields: true })),
+      c2.receive.next().then((x) => ({ x, yields: false })),
+    ];
+    while (!finished1 || !finished2) {
+      const {
+        x: { done, value },
+        yields,
+      } = await Promise.race(eventSlice);
+      if (done) {
+        if (yields) {
+          finished1 = true;
+        } else {
+          finished2 = true;
+        }
+        eventSlice[yields ? 0 : 1] = new Promise(() => {
+          // Empty function, used for a never-resolving promise.
+        });
+      } else {
+        eventSlice[yields ? 0 : 1] = (yields ? c1 : c2).receive
+          .next()
+          .then((x) => ({ x, yields }));
+        if (yields) {
+          yield value;
+        } else {
+          c1.send(value);
+        }
+      }
+    }
+  }
+  return {
+    send: c2.send.bind(c2),
+    receive: composed(),
+    close: async () => {
+      await c2.close();
+      await c1.close();
+    },
+  };
+};

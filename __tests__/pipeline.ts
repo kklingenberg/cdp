@@ -8,7 +8,7 @@ const dummyInput = (async function* () {
   // Empty function
 })();
 
-const dummyStepFactory = async () => new AsyncQueue<Event>();
+const dummyStepFactory = async () => new AsyncQueue<Event>().asChannel();
 
 // Tests start here.
 

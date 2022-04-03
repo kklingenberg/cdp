@@ -1,4 +1,4 @@
-import { Channel } from "./async-queue";
+import { Channel, flatMap } from "./async-queue";
 import { ajv, getSignature, makeLogger } from "./utils";
 import { isValidEventName } from "./pattern";
 
@@ -293,17 +293,8 @@ export const parseChannel = <T>(
   channel: Channel<T, unknown>,
   parser: (raw: unknown) => Promise<Event>,
   context?: string
-): Channel<T, Event> => {
-  async function* receiver() {
-    for await (const raw of channel.receive) {
-      for (const event of await parseVector(
-        raw,
-        parser,
-        context ?? "parsing channel"
-      )) {
-        yield event;
-      }
-    }
-  }
-  return { send: channel.send, receive: receiver() };
-};
+): Channel<T, Event> =>
+  flatMap(
+    (raw: unknown) => parseVector(raw, parser, context ?? "parsing channel"),
+    channel
+  );

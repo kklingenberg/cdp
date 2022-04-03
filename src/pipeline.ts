@@ -2,7 +2,8 @@ import { AsyncQueue } from "./async-queue";
 import { QUEUE_DRAIN_GRACE_PERIOD } from "./conf";
 import * as deadLetter from "./dead-letter";
 import { Event } from "./event";
-import { makeLogger } from "./utils";
+import { Step, StepFactory } from "./step";
+import { makeLogger, resolveAfter } from "./utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -16,7 +17,7 @@ const logger = makeLogger("pipeline");
 export interface StepDefinition {
   name: string;
   after: string[];
-  factory: (send: (...events: Event[]) => void) => Promise<AsyncQueue<Event>>;
+  factory: StepFactory;
 }
 
 /**
@@ -161,14 +162,11 @@ export const run = async (
           deadEvents.push(event);
         }
       });
-  const steps: Map<number, AsyncQueue<Event>> = new Map(
+  const steps: Map<number, Step> = new Map(
     await Promise.all(
       pipeline.steps.map(
         async (step, index) =>
-          [index, await step.factory(makeSender(index))] as [
-            number,
-            AsyncQueue<Event>
-          ]
+          [index, await step.factory(makeSender(index))] as [number, Step]
       )
     )
   );
@@ -185,7 +183,7 @@ export const run = async (
       const nextNodeIndices = edges.get(sourceNodeIndex) ?? [];
       let sent = true;
       nextNodeIndices.forEach((nodeIndex) => {
-        if (!(steps.get(nodeIndex) as AsyncQueue<Event>).push(event)) {
+        if (!(steps.get(nodeIndex) as Step).send(event)) {
           sent = false;
         }
       });
@@ -206,15 +204,12 @@ export const run = async (
         (reverseEdges.get(stepIndex) as number[]).every((i) => !pool.has(i))
       );
       for (const i of toRemove) {
-        const queue = steps.get(i) as AsyncQueue<Event>;
-        queue.close();
-        await queue.drain;
+        const channel = steps.get(i) as Step;
+        await channel.close();
         pool.delete(i);
       }
-      // Give time for remaining events to propagate
-      await new Promise((resolve) =>
-        setTimeout(resolve, QUEUE_DRAIN_GRACE_PERIOD)
-      );
+      // Give time for remaining events to propagate.
+      await resolveAfter(QUEUE_DRAIN_GRACE_PERIOD * 1000);
     }
     // Close the bus queue and drain it.
     busQueue.close();

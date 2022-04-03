@@ -83,3 +83,15 @@ export const makeLogger = (ns: string): Logger => {
     ),
   };
 };
+
+/**
+ * Creates a promise that resolves after the specified number of
+ * milliseconds.
+ *
+ * @param t The number of milliseconds to wait before resolving.
+ * @param v The optional value to resolve with.
+ * @returns A promise that resolves after the specified time and with
+ * the specified value.
+ */
+export const resolveAfter = <T>(t: number, v?: T): Promise<T> =>
+  new Promise((resolve) => setTimeout(resolve, t, v));

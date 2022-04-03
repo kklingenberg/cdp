@@ -1,4 +1,29 @@
-import { AsyncQueue } from "../src/async-queue";
+import { AsyncQueue, flatMap, compose } from "../src/async-queue";
+
+/**
+ * Consume an async generator. This is used in some of the following
+ * tests to compare results with the expected values.
+ */
+const consume = async (
+  generator: AsyncGenerator<unknown>,
+  maxValues: number
+): Promise<unknown[]> => {
+  let count = 0;
+  const values: unknown[] = [];
+  if (count >= maxValues) {
+    return Promise.resolve(values);
+  }
+  for await (const value of generator) {
+    values.push(value);
+    count++;
+    if (count >= maxValues) {
+      return values;
+    }
+  }
+  return values;
+};
+
+// Tests start here.
 
 test("Shifting from an empty queue blocks", async () => {
   const queue = new AsyncQueue<boolean>();
@@ -119,4 +144,18 @@ test("A queue's drain promise won't resolve if the queue isn't closed", async ()
     new Promise((resolve) => setTimeout(resolve, 1, false)),
   ]);
   expect(drained).toBe(true);
+});
+
+test("Channels can be composed with the compose combinator", async () => {
+  const firstQueue = new AsyncQueue<number>();
+  const firstChannel = flatMap(async (x) => [x * x], firstQueue.asChannel());
+  const secondQueue = new AsyncQueue<number>();
+  const secondChannel = flatMap(
+    async (x) => [x + 1, x - 1],
+    secondQueue.asChannel()
+  );
+  const firstSecond = compose(firstChannel, secondChannel);
+  firstSecond.send(1, 2, 3);
+  const firstSecondValues = await consume(firstSecond.receive, 6);
+  expect(firstSecondValues).toEqual([4, 0, 9, 1, 16, 4]);
 });

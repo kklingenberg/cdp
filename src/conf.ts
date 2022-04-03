@@ -28,9 +28,8 @@ export const PATH: string[] = (process.env.PATH ?? "")
 /**
  * Queue draining grace period: the maximum amount of time to wait for
  * external processing to finish doing what it needs to. Measured in
- * milliseconds.
+ * seconds.
  */
-export const QUEUE_DRAIN_GRACE_PERIOD: number = parseInt(
-  process.env.QUEUE_DRAIN_GRACE_PERIOD ?? "10",
-  10
+export const QUEUE_DRAIN_GRACE_PERIOD: number = parseFloat(
+  process.env.QUEUE_DRAIN_GRACE_PERIOD ?? "0.01"
 );
