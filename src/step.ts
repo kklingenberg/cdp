@@ -1,4 +1,4 @@
-import { Channel, compose } from "./async-queue";
+import { AsyncQueue, Channel, compose } from "./async-queue";
 import { Event } from "./event";
 import { Pattern } from "./pattern";
 import { makeLogger } from "./utils";
@@ -26,6 +26,24 @@ export type StepOptions = {
 };
 
 /**
+ * Build a matching procedure that determines whether an event is
+ * desired according to the given step options, and also forwards it
+ * if it's not desired but required to flow elsewhere.
+ *
+ * @param options The step options that determine the predicate.
+ * @param forward The forwarding function.
+ * @returns A predicate for events that also forwards the non-passing
+ * events if it's appropriate.
+ */
+const makeMatcher = (
+  options: StepOptions,
+  forward: (...events: Event[]) => void
+): ((event: Event) => boolean) => {
+  // TODO implement this
+  return (event) => true;
+};
+
+/**
  * Build a windowing channel that accumulates events in windows of the
  * configured size before forwarding them to the processing function.
  *
@@ -40,27 +58,72 @@ const makeWindowingChannel = (
   options: StepOptions,
   send: (...events: Event[]) => void
 ): Channel<Event, Event[]> => {
-  // TODO implement this
-  throw new Error("not implemented");
-};
-
-/**
- * Build a channel that matches events and drops, passes or forwards
- * them according to the given options.
- *
- * @param options The step options that also describe the matching
- * procedure.
- * @param send A shortcut procedure for events that are to be
- * 'passed'.
- * @returns A channel that acts as a matching (i.e. filtering)
- * function.
- */
-const makeMatchingChannel = (
-  options: StepOptions,
-  send: (...events: Event[]) => void
-): Channel<Event, Event> => {
-  // TODO implement this
-  throw new Error("not implemented");
+  const queue = new AsyncQueue<Event[]>();
+  const filterOrPass = makeMatcher(options, send);
+  const currentGroups: Map<number, Event[]> = new Map();
+  let currentGroupIndex = 0;
+  const timeWindow = (options.windowMaxDuration ?? -1) * 1000;
+  // This procedure does three things:
+  // - It pushes an event to an internal (set of) buffer(s).
+  // - It starts a timeout that will forward the buffer after enough
+  //   time.
+  // - It forwards the buffer(s) if they're 'big enough'.
+  // The criterion of whether to use a single buffer or a set of
+  // buffers maps on to the function mode. 'flatmap' requires for each
+  // event to be at the start of some buffer, thus the flatmap mode
+  // uses several concurrent buffers. The 'reduce' mode only requires
+  // one, which get's cleared after each forwarding.
+  const sendOne = (event: Event): boolean => {
+    const newGroup = !currentGroups.has(currentGroupIndex);
+    if (newGroup) {
+      currentGroups.set(currentGroupIndex, []);
+    }
+    currentGroups.forEach((g) => g.push(event));
+    if (newGroup && timeWindow >= 0) {
+      setTimeout(
+        (index) => {
+          if (currentGroups.has(index)) {
+            const timedOutGroup = currentGroups.get(index) as Event[];
+            currentGroups.delete(index);
+            queue.push(timedOutGroup);
+          }
+        },
+        timeWindow,
+        currentGroupIndex
+      );
+    }
+    if (options.functionMode === "reduce") {
+      // In reduce mode, groups are disjoint
+    } else {
+      // In flatmap mode, groups overlap
+      currentGroupIndex++;
+    }
+    return Array.from(currentGroups)
+      .sort(([indexA], [indexB]) => indexA - indexB)
+      .map(([index, group]) => {
+        if (group.length >= options.windowMaxSize) {
+          currentGroups.delete(index);
+          return queue.push(group);
+        }
+        return true;
+      })
+      .every((pushed) => pushed);
+  };
+  return {
+    send: (...values: Event[]) =>
+      values.filter(filterOrPass).every((value) => sendOne(value)),
+    receive: queue.iterator(),
+    close: async () => {
+      // Push any incomplete groups.
+      Array.from(currentGroups)
+        .sort(([indexA], [indexB]) => indexA - indexB)
+        .forEach(([index, group]) => {
+          currentGroups.delete(index);
+          queue.push(group);
+        });
+      queue.close();
+    },
+  };
 };
 
 /**
@@ -77,11 +140,9 @@ export type StepFactory = (send: (...events: Event[]) => void) => Promise<Step>;
  * @param fn The channel that does the processing.
  * @returns A step factory.
  */
-export const makeWindowed = (
-  options: StepOptions,
-  fn: Channel<Event[], Event>
-): StepFactory => {
-  return async (send) => {
+export const makeWindowed =
+  (options: StepOptions, fn: Channel<Event[], Event>): StepFactory =>
+  async (send) => {
     const windowingChannel = makeWindowingChannel(options, send);
     const channel = compose(fn, windowingChannel);
     const operate = async () => {
@@ -100,7 +161,6 @@ export const makeWindowed = (
     );
     return channel;
   };
-};
 
 /**
  * Builds a step factory, according to options and a preconfigured
@@ -110,13 +170,14 @@ export const makeWindowed = (
  * @param fn The channel that does the processing.
  * @returns A step factory.
  */
-export const makeStreamlined = (
-  options: StepOptions,
-  fn: Channel<Event, Event>
-): StepFactory => {
-  return async (send) => {
-    const matchingChannel = makeMatchingChannel(options, send);
-    const channel = compose(fn, matchingChannel);
+export const makeStreamlined =
+  (options: StepOptions, fn: Channel<Event, Event>): StepFactory =>
+  async (send) => {
+    const filterOrPass = makeMatcher(options, send);
+    const channel = {
+      ...fn,
+      send: (...events: Event[]) => fn.send(...events.filter(filterOrPass)),
+    };
     const operate = async () => {
       for await (const event of channel.receive) {
         send(event);
@@ -133,4 +194,3 @@ export const makeStreamlined = (
     );
     return channel;
   };
-};

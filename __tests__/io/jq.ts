@@ -1,3 +1,5 @@
+import { consume } from "../test-utils";
+import { resolveAfter } from "../../src/utils";
 import { closeInstances, makeChannel } from "../../src/io/jq";
 
 afterEach(() => {
@@ -24,4 +26,17 @@ test("Failures during processing interrupt parsing of the current payload", asyn
   // The (1 / 0.25) is never executed
   expect(second).toEqual(2);
   expect(third).toEqual(4);
+});
+
+test("Closing a jq channel ends the stream", async () => {
+  const { send, receive, close } = await makeChannel(".");
+  send(1, 2);
+  const [valuesBeforeClosing] = await Promise.all([
+    consume(receive),
+    resolveAfter(100).then(close),
+  ]);
+  send(3);
+  expect(valuesBeforeClosing).toEqual([1, 2]);
+  const valuesAfterClosing = await consume(receive);
+  expect(valuesAfterClosing).toEqual([]);
 });

@@ -1,25 +1,10 @@
 import { Readable } from "stream";
+import { consume } from "../test-utils";
 import { parse } from "../../src/io/read-stream";
 
 // Some of these tests use the fact that the default value for
 // PARSE_BUFFER_SIZE is 32 when the test environment is
 // active. Changing that value explicitly will break them.
-
-/**
- * Consume an async generator. This is used in all of the following
- * tests to compare results with the expected values.
- */
-const consume = async (
-  generator: AsyncGenerator<unknown>
-): Promise<unknown[]> => {
-  const values = [];
-  for await (const value of generator) {
-    values.push(value);
-  }
-  return values;
-};
-
-// Tests start here.
 
 test("An empty stream can be parsed", async () => {
   const stream = Readable.from([]);

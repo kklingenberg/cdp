@@ -101,14 +101,14 @@ export const makeChannel = async (
   });
   await precondition;
   const send = (...values: unknown[]): boolean => {
-    try {
-      values.forEach((value) => {
+    for (const value of values) {
+      if (child.stdin.writable) {
         child.stdin.write(JSON.stringify(value) + "\n");
-      });
-      return true;
-    } catch (err) {
-      return false;
+      } else {
+        return false;
+      }
     }
+    return true;
   };
   let notifyEnded: () => void;
   const ended: Promise<void> = new Promise((resolve) => {
@@ -123,10 +123,11 @@ export const makeChannel = async (
     send,
     receive: chain(parse(child.stdout), closeStream()),
     close: async () => {
+      child.stdin.end();
+      await ended;
       if (child.kill() && typeof child.pid !== "undefined") {
         instances.delete(child.pid);
       }
-      await ended;
     },
   };
 };

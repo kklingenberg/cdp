@@ -1,29 +1,5 @@
+import { consume } from "./test-utils";
 import { AsyncQueue, flatMap, compose } from "../src/async-queue";
-
-/**
- * Consume an async generator. This is used in some of the following
- * tests to compare results with the expected values.
- */
-const consume = async (
-  generator: AsyncGenerator<unknown>,
-  maxValues: number
-): Promise<unknown[]> => {
-  let count = 0;
-  const values: unknown[] = [];
-  if (count >= maxValues) {
-    return Promise.resolve(values);
-  }
-  for await (const value of generator) {
-    values.push(value);
-    count++;
-    if (count >= maxValues) {
-      return values;
-    }
-  }
-  return values;
-};
-
-// Tests start here.
 
 test("Shifting from an empty queue blocks", async () => {
   const queue = new AsyncQueue<boolean>();
@@ -73,16 +49,9 @@ test("An unblocked queue can be blocked by draining", async () => {
 
 test("A queue can be iterated over, and will yield until it's closed", async () => {
   const queue = new AsyncQueue<number>();
-  const consume = async () => {
-    const numbers = [];
-    for await (const n of queue.iterator()) {
-      numbers.push(n);
-    }
-    return numbers;
-  };
   const valueCount = 7;
   const [values] = await Promise.all([
-    consume(),
+    consume(queue.iterator()),
     new Promise((resolve) =>
       setTimeout(() => {
         for (let i = 0; i < valueCount; i++) {
@@ -98,22 +67,15 @@ test("A queue can be iterated over, and will yield until it's closed", async () 
 
 test("Closing a queue prevents pushes", async () => {
   const queue = new AsyncQueue<number>();
-  const consume = async () => {
-    const numbers = [];
-    for await (const n of queue.iterator()) {
-      numbers.push(n);
-    }
-    return numbers;
-  };
   const pushedValues = [1, 2, 3];
   const nonPushedValues = [4, 5, 6];
   const nonPushedValuesAfterConsumption = [7, 8, 9];
   pushedValues.forEach(queue.push.bind(queue));
   queue.close();
   nonPushedValues.forEach(queue.push.bind(queue));
-  const values = await consume();
+  const values = await consume(queue.iterator());
   nonPushedValuesAfterConsumption.forEach(queue.push.bind(queue));
-  const remainderValues = await consume();
+  const remainderValues = await consume(queue.iterator());
   expect(values).toEqual(pushedValues);
   expect(remainderValues).toEqual([]);
 });
