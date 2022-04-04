@@ -1,5 +1,4 @@
 import { AsyncQueue } from "./async-queue";
-import { QUEUE_DRAIN_GRACE_PERIOD } from "./conf";
 import * as deadLetter from "./dead-letter";
 import { Event } from "./event";
 import { Step, StepFactory } from "./step";
@@ -167,12 +166,9 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
   async function* digestEvents() {
     for await (const [sourceNodeIndex, event] of busQueue.iterator()) {
       const nextNodeIndices = edges.get(sourceNodeIndex) ?? [];
-      let sent = true;
-      nextNodeIndices.forEach((nodeIndex) => {
-        if (!(steps.get(nodeIndex) as Step).send(event)) {
-          sent = false;
-        }
-      });
+      const sent = nextNodeIndices
+        .map((nodeIndex) => (steps.get(nodeIndex) as Step).send(event))
+        .every((s) => s);
       if (!sent) {
         deadEvents.push(event);
       }
@@ -199,8 +195,9 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
       for (const i of toRemove) {
         pool.delete(i);
       }
-      // Give time for remaining events to propagate.
-      await resolveAfter(QUEUE_DRAIN_GRACE_PERIOD * 1000);
+      // Yield the event loop to allow for remaining events to
+      // propagate.
+      await resolveAfter(0);
     }
     // Close the bus queue and drain it.
     busQueue.close();

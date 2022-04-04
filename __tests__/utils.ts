@@ -21,8 +21,8 @@ test("Loggers can be created according to the current log level", () => {
   // This tests uses the fact that the null logger functions return
   // null, while the active logger functions return undefined.
   const logger = utils.makeLogger("test");
-  expect(logger.debug("test")).toBeNull();
-  expect(logger.info("test")).toBeNull();
-  expect(logger.warn("test")).toBeNull();
-  expect(logger.error("test")).toBeUndefined();
+  expect(logger.debug("this message was not expected")).toBeNull();
+  expect(logger.info("this message was not expected")).toBeNull();
+  expect(logger.warn("this message was not expected")).toBeNull();
+  expect(logger.error("this message is expected")).toBeUndefined();
 });

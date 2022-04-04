@@ -151,17 +151,25 @@ export const flatMap = <A, B, C>(
   fn: (x: B) => Promise<C[]>,
   channel: Channel<A, B>
 ): Channel<A, C> => {
+  let notifyFinished: () => void;
+  const receiverFinished: Promise<void> = new Promise((resolve) => {
+    notifyFinished = resolve;
+  });
   async function* receiver() {
     for await (const b of channel.receive) {
       for (const c of await fn(b)) {
         yield c;
       }
     }
+    notifyFinished();
   }
   return {
     send: channel.send,
     receive: receiver(),
-    close: channel.close.bind(channel),
+    close: async () => {
+      await channel.close();
+      await receiverFinished;
+    },
   };
 };
 

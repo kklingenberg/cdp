@@ -1,6 +1,6 @@
 import { AsyncQueue, Channel, compose } from "./async-queue";
 import { Event } from "./event";
-import { Pattern } from "./pattern";
+import { Pattern, match } from "./pattern";
 import { makeLogger } from "./utils";
 
 /**
@@ -39,8 +39,17 @@ const makeMatcher = (
   options: StepOptions,
   forward: (...events: Event[]) => void
 ): ((event: Event) => boolean) => {
-  // TODO implement this
-  return (event) => true;
+  const sendForward =
+    options.patternMode === "pass"
+      ? (e: Event) => {
+          forward(e);
+          return false;
+        }
+      : () => false;
+  return typeof options.pattern === "undefined"
+    ? () => true
+    : (event: Event) =>
+        match(event.name, options.pattern ?? "#") ? true : sendForward(event);
 };
 
 /**
@@ -49,20 +58,17 @@ const makeMatcher = (
  *
  * @param options The step options that also describe the windowing
  * procedure.
- * @param send A shortcut procedure for events that are to be
- * 'passed'.
  * @returns A channel that acts as a windowing (i.e. grouping)
  * function.
  */
-const makeWindowingChannel = (
-  options: StepOptions,
-  send: (...events: Event[]) => void
+export const makeWindowingChannel = (
+  options: StepOptions
 ): Channel<Event, Event[]> => {
   const queue = new AsyncQueue<Event[]>();
-  const filterOrPass = makeMatcher(options, send);
   const currentGroups: Map<number, Event[]> = new Map();
   let currentGroupIndex = 0;
-  const timeWindow = (options.windowMaxDuration ?? -1) * 1000;
+  const timeWindow =
+    options.windowMaxSize <= 1 ? -1 : (options.windowMaxDuration ?? -1) * 1000;
   // This procedure does three things:
   // - It pushes an event to an internal (set of) buffer(s).
   // - It starts a timeout that will forward the buffer after enough
@@ -90,7 +96,7 @@ const makeWindowingChannel = (
         },
         timeWindow,
         currentGroupIndex
-      );
+      ).unref();
     }
     if (options.functionMode === "reduce") {
       // In reduce mode, groups are disjoint
@@ -110,8 +116,7 @@ const makeWindowingChannel = (
       .every((pushed) => pushed);
   };
   return {
-    send: (...values: Event[]) =>
-      values.filter(filterOrPass).every((value) => sendOne(value)),
+    send: (...values: Event[]) => values.every((value) => sendOne(value)),
     receive: queue.iterator(),
     close: async () => {
       // Push any incomplete groups.
@@ -121,7 +126,9 @@ const makeWindowingChannel = (
           currentGroups.delete(index);
           queue.push(group);
         });
+      // Then close the queue.
       queue.close();
+      await queue.drain;
     },
   };
 };
@@ -140,11 +147,14 @@ export type StepFactory = (send: (...events: Event[]) => void) => Promise<Step>;
  * @param fn The channel that does the processing.
  * @returns A step factory.
  */
-export const makeWindowed =
-  (options: StepOptions, fn: Channel<Event[], Event>): StepFactory =>
-  async (send) => {
-    const windowingChannel = makeWindowingChannel(options, send);
-    const channel = compose(fn, windowingChannel);
+export const makeWindowed = (
+  options: StepOptions,
+  fn: Channel<Event[], Event>
+): StepFactory => {
+  const windowingChannel = makeWindowingChannel(options);
+  const channel = compose(fn, windowingChannel);
+  return async (send) => {
+    const filterOrPass = makeMatcher(options, send);
     const operate = async () => {
       for await (const event of channel.receive) {
         send(event);
@@ -159,8 +169,13 @@ export const makeWindowed =
           err
         )
     );
-    return channel;
+    return {
+      ...channel,
+      send: (...events: Event[]) =>
+        channel.send(...events.filter(filterOrPass)),
+    };
   };
+};
 
 /**
  * Builds a step factory, according to options and a preconfigured
@@ -174,12 +189,8 @@ export const makeStreamlined =
   (options: StepOptions, fn: Channel<Event, Event>): StepFactory =>
   async (send) => {
     const filterOrPass = makeMatcher(options, send);
-    const channel = {
-      ...fn,
-      send: (...events: Event[]) => fn.send(...events.filter(filterOrPass)),
-    };
     const operate = async () => {
-      for await (const event of channel.receive) {
+      for await (const event of fn.receive) {
         send(event);
       }
     };
@@ -192,5 +203,8 @@ export const makeStreamlined =
           err
         )
     );
-    return channel;
+    return {
+      ...fn,
+      send: (...events: Event[]) => fn.send(...events.filter(filterOrPass)),
+    };
   };
