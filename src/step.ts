@@ -45,6 +45,25 @@ const makeWindowingChannel = (
 };
 
 /**
+ * Build a channel that matches events and drops, passes or forwards
+ * them according to the given options.
+ *
+ * @param options The step options that also describe the matching
+ * procedure.
+ * @param send A shortcut procedure for events that are to be
+ * 'passed'.
+ * @returns A channel that acts as a matching (i.e. filtering)
+ * function.
+ */
+const makeMatchingChannel = (
+  options: StepOptions,
+  send: (...events: Event[]) => void
+): Channel<Event, Event> => {
+  // TODO implement this
+  throw new Error("not implemented");
+};
+
+/**
  * A step is a function that bootstraps a step once it's given the
  * forwarding procedure.
  */
@@ -58,13 +77,46 @@ export type StepFactory = (send: (...events: Event[]) => void) => Promise<Step>;
  * @param fn The channel that does the processing.
  * @returns A step factory.
  */
-export const make = (
+export const makeWindowed = (
   options: StepOptions,
   fn: Channel<Event[], Event>
 ): StepFactory => {
   return async (send) => {
     const windowingChannel = makeWindowingChannel(options, send);
     const channel = compose(fn, windowingChannel);
+    const operate = async () => {
+      for await (const event of channel.receive) {
+        send(event);
+      }
+    };
+    // Start the event processing
+    operate().then(
+      () => logger.info(`Step ${options.name} finished operation`),
+      (err) =>
+        logger.warn(
+          `Step ${options.name} encountered an error during operation`,
+          err
+        )
+    );
+    return channel;
+  };
+};
+
+/**
+ * Builds a step factory, according to options and a preconfigured
+ * channel that processes single events.
+ *
+ * @param options The step options.
+ * @param fn The channel that does the processing.
+ * @returns A step factory.
+ */
+export const makeStreamlined = (
+  options: StepOptions,
+  fn: Channel<Event, Event>
+): StepFactory => {
+  return async (send) => {
+    const matchingChannel = makeMatchingChannel(options, send);
+    const channel = compose(fn, matchingChannel);
     const operate = async () => {
       for await (const event of channel.receive) {
         send(event);

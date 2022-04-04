@@ -22,11 +22,9 @@ export interface StepDefinition {
 
 /**
  * A pipeline definition stripped of anything that's not essential for
- * its execution. It essentially reduces to an initial generator and a
- * DAG of pipeline steps.
+ * its execution. It essentially reduces to a DAG of pipeline steps.
  */
 export interface Pipeline {
-  input: AsyncGenerator<Event>;
   steps: StepDefinition[];
 }
 
@@ -99,19 +97,14 @@ export const validate = (pipeline: Pipeline): void => {
 };
 
 /**
- * Runs a pipeline. Returns a pair containing the promise to await for
- * the pipeline to finish, and a function that can be called to finish
- * it and clean resources. If the pipeline contains an improper DAG
- * (e.g. with cycles or dangling references), this procedure throws an
- * error.
+ * Runs a pipeline. Returns a channel in which events flow. If the
+ * pipeline contains an improper DAG (e.g. with cycles or dangling
+ * references), this procedure throws an error.
  *
  * @param pipeline The pipeline to run.
- * @returns A promise yielding a pair of the pipeline promise and a
- * finishing function, that schedules the end of the pipeline.
+ * @returns A promise yielding a channel of events.
  */
-export const run = async (
-  pipeline: Pipeline
-): Promise<[Promise<void>, () => Promise<void>]> => {
+export const run = async (pipeline: Pipeline): Promise<Step> => {
   // Ensure the pipeline is proper.
   validate(pipeline);
   // Translate steps into integers for lighter event annotations.
@@ -170,15 +163,8 @@ export const run = async (
       )
     )
   );
-  // Prepare the main promise, as a combination of the input feeding
-  // promise and the event-digesting promise.
-  const feedInput = async () => {
-    for await (const event of pipeline.input) {
-      busQueue.push([inputNodeIndex, event]);
-    }
-  };
-  const finishedFeedingInput = feedInput();
-  const digestEvents = async () => {
+  // Prepare the main async generator.
+  async function* digestEvents() {
     for await (const [sourceNodeIndex, event] of busQueue.iterator()) {
       const nextNodeIndices = edges.get(sourceNodeIndex) ?? [];
       let sent = true;
@@ -190,12 +176,18 @@ export const run = async (
       if (!sent) {
         deadEvents.push(event);
       }
+      if (nextNodeIndices.length === 0) {
+        yield event;
+      }
     }
-  };
+    logger.info("Pipeline finished processing events");
+    if (deadEvents.length > 0) {
+      logger.info("Handling dead events:", deadEvents.length, "events");
+      await deadLetter.handler(deadEvents);
+    }
+  }
   // Prepare the closing procedure.
   const close = async () => {
-    // Wait for the input to stop flowing.
-    await finishedFeedingInput;
     // Sort steps in ascending order of dependency levels, and close
     // the queues in that order.
     const pool: Set<number> = new Set(steps.keys());
@@ -203,9 +195,8 @@ export const run = async (
       const toRemove = Array.from(pool).filter((stepIndex) =>
         (reverseEdges.get(stepIndex) as number[]).every((i) => !pool.has(i))
       );
+      await Promise.all(toRemove.map((i) => (steps.get(i) as Step).close()));
       for (const i of toRemove) {
-        const channel = steps.get(i) as Step;
-        await channel.close();
         pool.delete(i);
       }
       // Give time for remaining events to propagate.
@@ -215,14 +206,12 @@ export const run = async (
     busQueue.close();
     await busQueue.drain;
   };
-  return [
-    Promise.all([finishedFeedingInput, digestEvents()]).then(async () => {
-      logger.info("Pipeline finished processing events");
-      if (deadEvents.length > 0) {
-        logger.info("Handling dead events:", deadEvents.length, "events");
-        await deadLetter.handler(deadEvents);
-      }
-    }),
+  return {
+    send: (...events: Event[]) =>
+      events
+        .map((event) => busQueue.push([inputNodeIndex, event]))
+        .every((sent) => sent),
+    receive: digestEvents(),
     close,
-  ];
+  };
 };

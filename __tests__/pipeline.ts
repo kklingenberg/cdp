@@ -2,19 +2,13 @@ import { AsyncQueue } from "../src/async-queue";
 import { Event } from "../src/event";
 import { INPUT_ALIAS, validate } from "../src/pipeline";
 
-// These mocks are used to prepare dummy pipelines.
-
-const dummyInput = (async function* () {
-  // Empty function
-})();
-
+// This mock is used to prepare dummy pipelines.
 const dummyStepFactory = async () => new AsyncQueue<Event>().asChannel();
 
 // Tests start here.
 
 test("Pipeline validation detects usage of the reserved step name", () => {
   const pipeline = {
-    input: dummyInput,
     steps: [
       {
         name: "foo",
@@ -33,7 +27,6 @@ test("Pipeline validation detects usage of the reserved step name", () => {
 
 test("Pipeline validation detects duplicate step names", () => {
   const pipeline = {
-    input: dummyInput,
     steps: [
       {
         name: "foo",
@@ -57,7 +50,6 @@ test("Pipeline validation detects duplicate step names", () => {
 
 test("Pipeline validation detects dangling dependencies", () => {
   const pipeline = {
-    input: dummyInput,
     steps: [
       {
         name: "foo",
@@ -76,7 +68,6 @@ test("Pipeline validation detects dangling dependencies", () => {
 
 test("Pipeline validation accepts a direct dependency to the input alias", () => {
   const pipeline = {
-    input: dummyInput,
     steps: [
       {
         name: "foo",
@@ -95,7 +86,6 @@ test("Pipeline validation accepts a direct dependency to the input alias", () =>
 
 test("Pipeline validation detects a trivial graph cycle", () => {
   const pipeline = {
-    input: dummyInput,
     steps: [
       {
         name: "foo",
@@ -109,7 +99,6 @@ test("Pipeline validation detects a trivial graph cycle", () => {
 
 test("Pipeline validation detects a graph cycle of greater length", () => {
   const pipeline = {
-    input: dummyInput,
     steps: [
       {
         name: "foo",
@@ -135,7 +124,6 @@ test("Pipeline validation detects a graph cycle of greater length", () => {
 
 test("Pipeline validation accepts shared dependencies", () => {
   const pipeline = {
-    input: dummyInput,
     steps: [
       {
         name: "foo",
