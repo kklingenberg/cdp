@@ -2,6 +2,7 @@ import fs from "fs";
 import { program } from "commander";
 import YAML from "yaml";
 import * as pkg from "../package.json";
+import { Pattern } from "./pattern";
 
 export const VERSION = pkg.version;
 
@@ -12,7 +13,107 @@ export const VERSION = pkg.version;
  * @returns A replaced thing, that has the same shape as the given
  * thing but with placeholders replaced.
  */
-const envsubst = (thing: unknown): unknown => thing;
+const envsubst = (thing: unknown): unknown => {
+  if (typeof thing === "string") {
+    return thing.replace(
+      /\$\{[A-Za-z]\w*\}/g,
+      (expr: string) => process.env[expr.slice(2, -1)] ?? ""
+    );
+  } else if (Array.isArray(thing)) {
+    return thing.map(envsubst);
+  } else if (typeof thing === "object" && thing !== null) {
+    return Object.fromEntries(
+      Object.entries(thing).map(([k, v]) => [envsubst(k), envsubst(v)])
+    );
+  } else {
+    return thing;
+  }
+};
+
+/**
+ * A `rename` function changes the name of the events it receives.
+ */
+interface RenameFunctionTemplate {
+  rename: { append?: string; prepend?: string } | { replace: string };
+}
+
+/**
+ * A `deduplicate` function removes event duplicates from the batches
+ * it receives.
+ */
+interface DeduplicateFunctionTemplate {
+  deduplicate: Record<string, never>;
+}
+
+/**
+ * A `keep` function limits event batches to a specific size, after
+ * windowing.
+ */
+interface KeepFunctionTemplate {
+  keep: number;
+}
+
+/**
+ * A `keep-when` function removes events that don't comply with a
+ * specific jsonschema.
+ */
+interface KeepWhenFunctionTemplate {
+  ["keep-when"]: object;
+}
+
+/**
+ * A `send-stdout` function emits events as serialized JSON to STDOUT,
+ * and forwards the received events as-is to the rest of the pipeline.
+ */
+interface SendSTDOUTFunctionTemplate {
+  ["send-stdout"]: {
+    ["jq-expr"]?: string;
+  };
+}
+
+/**
+ * A `send-http` function emits event batches to a remote HTTP
+ * endpoint, ignores the response entirely and forwards the original
+ * events to the rest of the pipeline.
+ */
+interface SendHTTPFunctionTemplate {
+  ["send-http"]:
+    | string
+    | {
+        target: string;
+        ["jq-expr"]?: string;
+        headers?: object;
+      };
+}
+
+/**
+ * A `send-receive-jq` function processes batches of events with a jq
+ * program, and the transformed events are sent back to the rest of
+ * the pipeline.
+ */
+interface SendReceiveJqFunctionTemplate {
+  ["send-receive-jq"]:
+    | string
+    | {
+        ["jq-expr"]: string;
+      };
+}
+
+/**
+ * A `send-receive-http` function processes batches of events with a
+ * remote HTTP service. The service is expected to respond with the
+ * transformed events, which get forwarded to the rest of the
+ * pipeline.
+ */
+interface SendReceiveHTTPFunctionTemplate {
+  ["send-receive-http"]:
+    | string
+    | {
+        target: string;
+        ["jq-expr"]?: string;
+        headers?: object;
+      };
+}
 
 /**
  * A pipeline template contains all the fields required to instantiate
@@ -20,7 +121,38 @@ const envsubst = (thing: unknown): unknown => thing;
  */
 interface PipelineTemplate {
   name: string;
-  TODO: "Define this";
+  input:
+    | { stdin: Record<string, never> }
+    | { http: { endpoint: string; port: number; ["health-endpoint"]: string } };
+  steps: {
+    [key: string]: {
+      after?: string[];
+      ["match/drop"]?: Pattern;
+      ["match/pass"]?: Pattern;
+      window?: {
+        events: number;
+        seconds: number;
+      };
+      flatmap?:
+        | RenameFunctionTemplate
+        | DeduplicateFunctionTemplate
+        | KeepFunctionTemplate
+        | KeepWhenFunctionTemplate
+        | SendSTDOUTFunctionTemplate
+        | SendHTTPFunctionTemplate
+        | SendReceiveJqFunctionTemplate
+        | SendReceiveHTTPFunctionTemplate;
+      reduce?:
+        | RenameFunctionTemplate
+        | DeduplicateFunctionTemplate
+        | KeepFunctionTemplate
+        | KeepWhenFunctionTemplate
+        | SendSTDOUTFunctionTemplate
+        | SendHTTPFunctionTemplate
+        | SendReceiveJqFunctionTemplate
+        | SendReceiveHTTPFunctionTemplate;
+    };
+  };
 }
 
 /**
