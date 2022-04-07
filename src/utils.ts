@@ -16,6 +16,10 @@ export const ajv = new Ajv();
  */
 export const getSignature = (...args: unknown[]): Promise<string> =>
   new Promise((resolve, reject) => {
+    if (args.every((arg) => typeof arg === "undefined")) {
+      reject(new Error("no valid argument was given"));
+      return;
+    }
     const hash = createHash("sha1");
     hash.on("readable", () => {
       const data = hash.read();
@@ -27,7 +31,9 @@ export const getSignature = (...args: unknown[]): Promise<string> =>
     });
     hash.on("error", reject);
     try {
-      args.forEach((arg) => hash.write(JSON.stringify(arg)));
+      args
+        .filter((arg) => typeof arg !== "undefined")
+        .forEach((arg) => hash.write(JSON.stringify(arg)));
     } catch (err) {
       reject(err);
     } finally {

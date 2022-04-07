@@ -209,7 +209,6 @@ const validateOldRawEvent = (raw: unknown): void => {
  * stemmed from the current pipeline and were captured by the input
  * form. As such, they will always receive a new trace point.
  *
- * @param timestamp The unix timestamp to attach to the trace point.
  * @param pipelineName The name of the current pipeline.
  * @param pipelineSignature The signature of the current pipeline.
  * @returns A function that takes raw values and returns an
@@ -217,7 +216,6 @@ const validateOldRawEvent = (raw: unknown): void => {
  */
 export const makeNewEventParser =
   (
-    timestamp: number,
     pipelineName: string,
     pipelineSignature: string
   ): ((raw: unknown) => Promise<Event>) =>
@@ -226,7 +224,7 @@ export const makeNewEventParser =
     const rawValid = raw as SerializedEvent;
     return make(rawValid.n, rawValid.d, [
       ...(rawValid.t ?? []),
-      { i: timestamp, p: pipelineName, h: pipelineSignature },
+      { i: new Date().getTime() / 1000, p: pipelineName, h: pipelineSignature },
     ]);
   };
 
@@ -267,7 +265,7 @@ export const parseVector = async (
       const event = await parser(rawVector);
       return [event];
     } catch (err) {
-      logger.warn("Event dropped after", context, ";", new String(err));
+      logger.warn("Event dropped after", `${context};`, new String(err));
       return [];
     }
   }

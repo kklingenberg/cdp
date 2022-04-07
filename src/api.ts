@@ -1,6 +1,23 @@
+import { Channel, compose } from "./async-queue";
+import { Event } from "./event";
+import { makeSTDINInput, makeHTTPInput } from "./input";
 import { Pattern, patternSchema, isValidPattern } from "./pattern";
-import { Pipeline, validate } from "./pipeline";
-import { ajv, getSignature } from "./utils";
+import { StepDefinition, Pipeline, validate, run } from "./pipeline";
+import { makeWindowed } from "./step";
+import { make as makeDeduplicateFunction } from "./step-functions/deduplicate";
+import { make as makeKeepFunction } from "./step-functions/keep";
+import { make as makeKeepWhenFunction } from "./step-functions/keep-when";
+import { make as makeRenameFunction } from "./step-functions/rename";
+import { make as makeSendHTTPFunction } from "./step-functions/send-http";
+import { make as makeSendReceiveHTTPFunction } from "./step-functions/send-receive-http";
+import { make as makeSendReceiveJqFunction } from "./step-functions/send-receive-jq";
+import { make as makeSendSTDOUTFunction } from "./step-functions/send-stdout";
+import { ajv, getSignature, makeLogger } from "./utils";
+
+/**
+ * A logger instance namespaced to this module.
+ */
+const logger = makeLogger("api");
 
 /**
  * The `stdin` input form ingests events from STDIN.
@@ -30,7 +47,7 @@ interface HTTPInputTemplate {
     | string
     | {
         endpoint: string;
-        port?: number;
+        port?: number | string;
       };
 }
 const httpInputTemplateSchema = {
@@ -126,7 +143,7 @@ const deduplicateFunctionTemplateSchema = {
  * windowing.
  */
 interface KeepFunctionTemplate {
-  keep: number;
+  keep: number | string;
 }
 const keepFunctionTemplateSchema = {
   type: "object",
@@ -175,7 +192,7 @@ const sendSTDOUTFunctionTemplateSchema = {
         {
           type: "object",
           properties: {
-            "jq-expr": { type: "string", minimumLength: 1 },
+            "jq-expr": { type: "string", minLength: 1 },
           },
           additionalProperties: false,
           required: [],
@@ -211,8 +228,8 @@ const sendHTTPFunctionTemplateSchema = {
         {
           type: "object",
           properties: {
-            target: { type: "string", minimumLength: 1 },
-            "jq-expr": { type: "string", minimumLength: 1 },
+            target: { type: "string", minLength: 1 },
+            "jq-expr": { type: "string", minLength: 1 },
             headers: { type: "object" },
           },
           additionalProperties: false,
@@ -246,7 +263,7 @@ const sendReceiveJqFunctionTemplateSchema = {
         {
           type: "object",
           properties: {
-            "jq-expr": { type: "string", minimumLength: 1 },
+            "jq-expr": { type: "string", minLength: 1 },
           },
           additionalProperties: false,
           required: ["jq-expr"],
@@ -282,8 +299,8 @@ const sendReceiveHTTPFunctionTemplateSchema = {
         {
           type: "object",
           properties: {
-            target: { type: "string", minimumLength: 1 },
-            "jq-expr": { type: "string", minimumLength: 1 },
+            target: { type: "string", minLength: 1 },
+            "jq-expr": { type: "string", minLength: 1 },
             headers: { type: "object" },
           },
           additionalProperties: false,
@@ -309,8 +326,8 @@ interface PipelineTemplate {
       ["match/drop"]?: Pattern;
       ["match/pass"]?: Pattern;
       window?: {
-        events: number;
-        seconds: number;
+        events: number | string;
+        seconds: number | string;
       };
       flatmap?:
         | RenameFunctionTemplate
@@ -344,7 +361,7 @@ const pipelineTemplateSchema = {
       additionalProperties: {
         type: "object",
         properties: {
-          after: { type: "array", items: [{ type: "string", minLength: 1 }] },
+          after: { type: "array", items: { type: "string", minLength: 1 } },
           "match/drop": patternSchema,
           "match/pass": patternSchema,
           window: {
@@ -522,5 +539,120 @@ export const runPipeline = async (
   template: PipelineTemplate
 ): Promise<[Promise<void>, () => void]> => {
   const signature = await getSignature(template);
-  throw new Error("TODO not implemented");
+  // Create the input channel.
+  let inputChannel: Channel<never, Event>;
+  const inputKey = Object.keys(template.input)[0];
+  switch (inputKey) {
+    case "http":
+      inputChannel = makeHTTPInput(
+        template.name,
+        signature,
+        (template.input as HTTPInputTemplate).http
+      );
+      break;
+    case "stdin":
+    default:
+      inputChannel = makeSTDINInput(
+        template.name,
+        signature,
+        (template.input as STDINInputTemplate).stdin
+      );
+      break;
+  }
+  // Create the pipeline channel.
+  const steps: StepDefinition[] = [];
+  for (const [name, definition] of Object.entries(template.steps ?? {})) {
+    const window = definition.window ?? { events: 1, seconds: -1 };
+    const patternMode: "pass" | "drop" =
+      "match/drop" in definition ? "drop" : "pass";
+    const pattern =
+      "match/drop" in definition
+        ? definition["match/drop"]
+        : definition["match/pass"];
+    const functionMode: "flatmap" | "reduce" =
+      "reduce" in definition ? "reduce" : "flatmap";
+    const options = {
+      name,
+      windowMaxSize:
+        typeof window.events === "string"
+          ? parseInt(window.events, 10)
+          : window.events,
+      windowMaxDuration:
+        typeof window.seconds === "string"
+          ? parseFloat(window.seconds)
+          : window.seconds,
+      pattern,
+      patternMode,
+      functionMode,
+    };
+    const fnKey = Object.keys(definition[functionMode] ?? {})[0];
+    let fn;
+    switch (fnKey) {
+      case "send-receive-http":
+        fn = await makeSendReceiveHTTPFunction(
+          (definition[functionMode] as SendReceiveHTTPFunctionTemplate)[
+            "send-receive-http"
+          ]
+        );
+        break;
+      case "send-receive-jq":
+        fn = await makeSendReceiveJqFunction(
+          (definition[functionMode] as SendReceiveJqFunctionTemplate)[
+            "send-receive-jq"
+          ]
+        );
+        break;
+      case "send-http":
+        fn = await makeSendHTTPFunction(
+          (definition[functionMode] as SendHTTPFunctionTemplate)["send-http"]
+        );
+        break;
+      case "send-stdout":
+        fn = await makeSendSTDOUTFunction(
+          (definition[functionMode] as SendSTDOUTFunctionTemplate)[
+            "send-stdout"
+          ]
+        );
+        break;
+      case "keep-when":
+        fn = await makeKeepWhenFunction(
+          (definition[functionMode] as KeepWhenFunctionTemplate)["keep-when"]
+        );
+        break;
+      case "deduplicate":
+        fn = await makeDeduplicateFunction(
+          (definition[functionMode] as DeduplicateFunctionTemplate).deduplicate
+        );
+        break;
+      case "rename":
+        fn = await makeRenameFunction(
+          (definition[functionMode] as RenameFunctionTemplate).rename
+        );
+        break;
+      case "keep":
+      default:
+        fn = await makeKeepFunction(
+          (definition[functionMode] as KeepFunctionTemplate).keep
+        );
+        break;
+    }
+    const factory = makeWindowed(options, fn);
+    steps.push({
+      name,
+      after: definition.after ?? [],
+      factory,
+    });
+  }
+  const pipelineChannel = await run({ steps });
+  // Connect the input's data to the pipeline.
+  const connectedChannel = compose(pipelineChannel, inputChannel);
+  // Start it up.
+  const operate = async (): Promise<void> => {
+    for await (const event of connectedChannel.receive) {
+      // Here, `event` already went through the whole
+      // pipeline. Nothing else needs to be done.
+      logger.debug("Event", event.signature, "reached the end of the pipeline");
+    }
+  };
+  return [operate(), connectedChannel.close.bind(connectedChannel)];
 };

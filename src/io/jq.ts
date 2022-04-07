@@ -70,9 +70,9 @@ const wrapJqProgram = (program: string): string => `try (${program})`;
  * @param program The jq program to use.
  * @returns A promise yielding a channel.
  */
-export const makeChannel = async (
+export const makeChannel = async <T>(
   program: string
-): Promise<Channel<unknown, unknown>> => {
+): Promise<Channel<T, unknown>> => {
   const path = getJqPath();
   if (path === null) {
     throw new Error(
@@ -100,7 +100,7 @@ export const makeChannel = async (
     onError(err);
   });
   await precondition;
-  const send = (...values: unknown[]): boolean => {
+  const send = (...values: T[]): boolean => {
     for (const value of values) {
       if (child.stdin.writable) {
         child.stdin.write(JSON.stringify(value) + "\n");
