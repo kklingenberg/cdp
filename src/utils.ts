@@ -114,3 +114,27 @@ export async function* chain<T>(
     yield value;
   }
 }
+
+/**
+ * Replace environment variable placeholders in the given thing.
+ *
+ * @param thing The thing to replace placeholders in.
+ * @returns A replaced thing, that has the same shape as the given
+ * thing but with placeholders replaced.
+ */
+export const envsubst = (thing: unknown): unknown => {
+  if (typeof thing === "string") {
+    return thing.replace(
+      /\$\{[A-Za-z]\w*\}/g,
+      (expr: string) => process.env[expr.slice(2, -1)] ?? ""
+    );
+  } else if (Array.isArray(thing)) {
+    return thing.map(envsubst);
+  } else if (typeof thing === "object" && thing !== null) {
+    return Object.fromEntries(
+      Object.entries(thing).map(([k, v]) => [envsubst(k), envsubst(v)])
+    );
+  } else {
+    return thing;
+  }
+};

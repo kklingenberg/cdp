@@ -83,7 +83,7 @@ export type Pattern =
 /**
  * Provide the type definition as a JSON schema.
  */
-const patternSchema = {
+export const patternSchema = {
   anyOf: [
     { type: "string" },
     {
