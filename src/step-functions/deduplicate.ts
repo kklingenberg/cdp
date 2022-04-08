@@ -1,5 +1,24 @@
-import { Channel } from "../async-queue";
+import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event } from "../event";
+
+/**
+ * Remove duplicate events from the given vector. The duplicate events
+ * removed are never the first ones encountered for each event
+ * identity.
+ *
+ * @param events Vector of events to remove duplicates from.
+ * @returns A new vector of events.
+ */
+const deduplicate = (events: Event[]): Event[] => {
+  const signatures = new Set<string>();
+  return events.filter((event) => {
+    if (signatures.has(event.signature)) {
+      return false;
+    }
+    signatures.add(event.signature);
+    return true;
+  });
+};
 
 /**
  * Function that removes event duplicates in each batch.
@@ -14,5 +33,9 @@ export const make = async (
   options: Record<string, never> | null
   /* eslint-enable @typescript-eslint/no-unused-vars */
 ): Promise<Channel<Event[], Event>> => {
-  throw new Error("TODO implement deduplicate");
+  const queue = new AsyncQueue<Event[]>();
+  return flatMap(
+    (events: Event[]) => Promise.resolve(deduplicate(events)),
+    queue.asChannel()
+  );
 };
