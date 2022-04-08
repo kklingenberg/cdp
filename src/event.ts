@@ -231,17 +231,34 @@ export const makeNewEventParser =
 /**
  * Builds a parser for **old events**, which are events that have
  * stemmed from the current pipeline, i.e. they were created by some
- * step function. As such, they don't receive additional trace points.
+ * step function. As such, they don't receive additional trace points
+ * unless they're found to have the tracepoint of this pipeline
+ * missing, in which case it's added to the end of the trace.
  *
+ * @param pipelineName The name of the current pipeline.
+ * @param pipelineSignature The signature of the current pipeline.
  * @returns A function that takes raw values and returns an
  * Event-yielding promise.
  */
 export const makeOldEventParser =
-  (): ((raw: unknown) => Promise<Event>) =>
+  (
+    pipelineName: string,
+    pipelineSignature: string
+  ): ((raw: unknown) => Promise<Event>) =>
   (raw: unknown): Promise<Event> => {
     validateOldRawEvent(raw);
     const rawValid = raw as SerializedEvent;
-    return make(rawValid.n, rawValid.d, rawValid.t ?? []);
+    const trace = rawValid.t ?? [];
+    if (
+      !trace.some(({ p, h }) => p === pipelineName && h === pipelineSignature)
+    ) {
+      trace.push({
+        i: new Date().getTime() / 1000,
+        p: pipelineName,
+        h: pipelineSignature,
+      });
+    }
+    return make(rawValid.n, rawValid.d, trace);
   };
 
 /**

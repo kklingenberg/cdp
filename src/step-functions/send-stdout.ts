@@ -6,12 +6,18 @@ import { makeChannel } from "../io/jq";
  * Function that sends events to STDOUT and forwards them to the
  * pipeline.
  *
+ * @param pipelineName The name of the pipeline.
+ * @param pipelineSignature The signature of the pipeline.
  * @param options The options that indicate how to send events to
  * STDOUT (specifically, they indicate wether to use jq as a
  * transformation step).
  * @returns A channel that forwards events to STDOUT.
  */
 export const make = async (
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  pipelineName: string,
+  pipelineSignature: string,
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   options: { ["jq-expr"]?: string } | null
 ): Promise<Channel<Event[], Event>> => {
   let forwarder: (events: Event[]) => void = (events: Event[]) =>

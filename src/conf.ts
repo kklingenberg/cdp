@@ -24,3 +24,35 @@ export const PARSE_BUFFER_SIZE: number = parseInt(
 export const PATH: string[] = (process.env.PATH ?? "")
   .split(":")
   .filter((p) => p.length > 0);
+
+/**
+ * The time to wait after the input drains before closing the
+ * pipeline.
+ */
+export const INPUT_DRAIN_TIMEOUT: number = parseFloat(
+  process.env.INPUT_DRAIN_TIMEOUT ?? "1" // 1 second
+);
+
+/**
+ * The timeout used for emitted HTTP requests.
+ */
+export const HTTP_CLIENT_TIMEOUT: number = parseInt(
+  process.env.HTTP_CLIENT_TIMEOUT ?? "60000",
+  10
+);
+
+/**
+ * The upper limit of redirects accepted when emitting HTTP requests.
+ */
+export const HTTP_CLIENT_MAX_REDIRECTS: number = parseInt(
+  process.env.HTTP_CLIENT_MAX_REDIRECTS ?? "10",
+  10
+);
+
+/**
+ * The upper limit of response sizes received for HTTP requests.
+ */
+export const HTTP_CLIENT_MAX_CONTENT_LENGTH: number = parseInt(
+  process.env.HTTP_CLIENT_MAX_CONTENT_LENGTH ?? "52428800", // 50 MiB
+  10
+);

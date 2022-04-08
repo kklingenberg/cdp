@@ -23,6 +23,8 @@ const deduplicate = (events: Event[]): Event[] => {
 /**
  * Function that removes event duplicates in each batch.
  *
+ * @param pipelineName The name of the pipeline.
+ * @param pipelineSignature The signature of the pipeline.
  * @param options The options that indicate how to deduplicate
  * events. This argument is actually ignored, since currently there
  * are no options available.
@@ -30,6 +32,8 @@ const deduplicate = (events: Event[]): Event[] => {
  */
 export const make = async (
   /* eslint-disable @typescript-eslint/no-unused-vars */
+  pipelineName: string,
+  pipelineSignature: string,
   options: Record<string, never> | null
   /* eslint-enable @typescript-eslint/no-unused-vars */
 ): Promise<Channel<Event[], Event>> => {

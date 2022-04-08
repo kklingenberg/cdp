@@ -9,15 +9,17 @@ import { makeLogger } from "./utils";
 const logger = makeLogger("input");
 
 /**
- * Creates an input channel based on data coming from STDIN.
+ * Creates an input channel based on data coming from STDIN. Returns a
+ * pair of [channel, endPromise].
  *
  * @param pipelineName The name of the pipeline that will use this
  * input.
  * @param pipelineSignature The signature of the pipeline that will
  * use this input.
  * @param options The STDIN options to configure the input channel.
- * @returns A channel that implicitly receives data from STDIN, and
- * forwards parsed events.
+ * @returns A channel that implicitly receives data from STDIN and
+ * forwards parsed events, and a promise that resolves when the input
+ * ends for any reason.
  */
 export const makeSTDINInput = (
   pipelineName: string,
@@ -25,7 +27,7 @@ export const makeSTDINInput = (
   /* eslint-disable @typescript-eslint/no-unused-vars */
   options: Record<string, never> | null
   /* eslint-enable @typescript-eslint/no-unused-vars */
-): Channel<never, Event> => {
+): [Channel<never, Event>, Promise<void>] => {
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const rawReceive = parse(process.stdin);
   let notifyDrained: () => void;
@@ -38,25 +40,29 @@ export const makeSTDINInput = (
     }
     notifyDrained();
   }
-  return parseChannel(
-    {
-      send: () => {
-        logger.warn("Can't send events to an input channel");
-        return false;
+  return [
+    parseChannel(
+      {
+        send: () => {
+          logger.warn("Can't send events to an input channel");
+          return false;
+        },
+        receive: receive(),
+        close: async () => {
+          process.stdin.destroy();
+          await drained;
+        },
       },
-      receive: receive(),
-      close: async () => {
-        process.stdin.destroy();
-        await drained;
-      },
-    },
-    eventParser,
-    "parsing raw STDIN input"
-  );
+      eventParser,
+      "parsing raw STDIN input"
+    ),
+    drained,
+  ];
 };
 
 /**
- * Creates an input channel based on data coming from HTTP.
+ * Creates an input channel based on data coming from HTTP. Returns a
+ * pair of [channel, endPromise].
  *
  * @param pipelineName The name of the pipeline that will use this
  * input.
@@ -64,12 +70,13 @@ export const makeSTDINInput = (
  * use this input.
  * @param options The HTTP options to configure the input channel.
  * @returns A channel that implicitly receives data from an HTTP
- * endpoint, and forwards parsed events.
+ * endpoint and forwards parsed events, and a promise that resolves
+ * when the input ends for any reason.
  */
 export const makeHTTPInput = (
   pipelineName: string,
   pipelineSignature: string,
   options: string | { endpoint: string; port?: number | string }
-): Channel<never, Event> => {
+): [Channel<never, Event>, Promise<void>] => {
   throw new Error("TODO: http input not implemented");
 };

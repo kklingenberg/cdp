@@ -1,4 +1,5 @@
 import { Channel, compose } from "./async-queue";
+import { INPUT_DRAIN_TIMEOUT } from "./conf";
 import { Event } from "./event";
 import { makeSTDINInput, makeHTTPInput } from "./input";
 import { Pattern, patternSchema, isValidPattern } from "./pattern";
@@ -12,7 +13,7 @@ import { make as makeSendHTTPFunction } from "./step-functions/send-http";
 import { make as makeSendReceiveHTTPFunction } from "./step-functions/send-receive-http";
 import { make as makeSendReceiveJqFunction } from "./step-functions/send-receive-jq";
 import { make as makeSendSTDOUTFunction } from "./step-functions/send-stdout";
-import { ajv, getSignature, makeLogger } from "./utils";
+import { ajv, getSignature, makeLogger, resolveAfter } from "./utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -216,7 +217,7 @@ interface SendHTTPFunctionTemplate {
     | {
         target: string;
         ["jq-expr"]?: string;
-        headers?: object;
+        headers?: { [key: string]: string | number | boolean };
       };
 }
 const sendHTTPFunctionTemplateSchema = {
@@ -230,7 +231,17 @@ const sendHTTPFunctionTemplateSchema = {
           properties: {
             target: { type: "string", minLength: 1 },
             "jq-expr": { type: "string", minLength: 1 },
-            headers: { type: "object" },
+            headers: {
+              type: "object",
+              properties: {},
+              additionalProperties: {
+                anyOf: [
+                  { type: "string" },
+                  { type: "number" },
+                  { type: "boolean" },
+                ],
+              },
+            },
           },
           additionalProperties: false,
           required: ["target"],
@@ -287,7 +298,7 @@ interface SendReceiveHTTPFunctionTemplate {
     | {
         target: string;
         ["jq-expr"]?: string;
-        headers?: object;
+        headers?: { [key: string]: string | number | boolean };
       };
 }
 const sendReceiveHTTPFunctionTemplateSchema = {
@@ -301,7 +312,17 @@ const sendReceiveHTTPFunctionTemplateSchema = {
           properties: {
             target: { type: "string", minLength: 1 },
             "jq-expr": { type: "string", minLength: 1 },
-            headers: { type: "object" },
+            headers: {
+              type: "object",
+              properties: {},
+              additionalProperties: {
+                anyOf: [
+                  { type: "string" },
+                  { type: "number" },
+                  { type: "boolean" },
+                ],
+              },
+            },
           },
           additionalProperties: false,
           required: ["target"],
@@ -541,10 +562,11 @@ export const runPipeline = async (
   const signature = await getSignature(template);
   // Create the input channel.
   let inputChannel: Channel<never, Event>;
+  let inputEnded: Promise<void>;
   const inputKey = Object.keys(template.input)[0];
   switch (inputKey) {
     case "http":
-      inputChannel = makeHTTPInput(
+      [inputChannel, inputEnded] = makeHTTPInput(
         template.name,
         signature,
         (template.input as HTTPInputTemplate).http
@@ -552,7 +574,7 @@ export const runPipeline = async (
       break;
     case "stdin":
     default:
-      inputChannel = makeSTDINInput(
+      [inputChannel, inputEnded] = makeSTDINInput(
         template.name,
         signature,
         (template.input as STDINInputTemplate).stdin
@@ -590,6 +612,8 @@ export const runPipeline = async (
     switch (fnKey) {
       case "send-receive-http":
         fn = await makeSendReceiveHTTPFunction(
+          template.name,
+          signature,
           (definition[functionMode] as SendReceiveHTTPFunctionTemplate)[
             "send-receive-http"
           ]
@@ -597,6 +621,8 @@ export const runPipeline = async (
         break;
       case "send-receive-jq":
         fn = await makeSendReceiveJqFunction(
+          template.name,
+          signature,
           (definition[functionMode] as SendReceiveJqFunctionTemplate)[
             "send-receive-jq"
           ]
@@ -604,11 +630,15 @@ export const runPipeline = async (
         break;
       case "send-http":
         fn = await makeSendHTTPFunction(
+          template.name,
+          signature,
           (definition[functionMode] as SendHTTPFunctionTemplate)["send-http"]
         );
         break;
       case "send-stdout":
         fn = await makeSendSTDOUTFunction(
+          template.name,
+          signature,
           (definition[functionMode] as SendSTDOUTFunctionTemplate)[
             "send-stdout"
           ]
@@ -616,22 +646,30 @@ export const runPipeline = async (
         break;
       case "keep-when":
         fn = await makeKeepWhenFunction(
+          template.name,
+          signature,
           (definition[functionMode] as KeepWhenFunctionTemplate)["keep-when"]
         );
         break;
       case "deduplicate":
         fn = await makeDeduplicateFunction(
+          template.name,
+          signature,
           (definition[functionMode] as DeduplicateFunctionTemplate).deduplicate
         );
         break;
       case "rename":
         fn = await makeRenameFunction(
+          template.name,
+          signature,
           (definition[functionMode] as RenameFunctionTemplate).rename
         );
         break;
       case "keep":
       default:
         fn = await makeKeepFunction(
+          template.name,
+          signature,
           (definition[functionMode] as KeepFunctionTemplate).keep
         );
         break;
@@ -654,5 +692,9 @@ export const runPipeline = async (
       logger.debug("Event", event.signature, "reached the end of the pipeline");
     }
   };
+  // Schedule the pipeline's close when the input ends by external causes.
+  inputEnded
+    .then(() => resolveAfter(INPUT_DRAIN_TIMEOUT * 1000))
+    .then(() => connectedChannel.close());
   return [operate(), connectedChannel.close.bind(connectedChannel)];
 };

@@ -15,6 +15,4 @@ use the given test event file to try a few:
 
 ```bash
 docker compose run --rm -T cdp < test-events.ndjson
-# Ctrl+C
-# docker compose down
 ```
