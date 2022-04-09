@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  cdp:
+    build:
+      context: ../..
+    image: cdp:dev
+    volumes:
+      - .:/app
+    command: ["-e", "/app/pipeline.yaml"]
+    ports:
+      - 8000:8000

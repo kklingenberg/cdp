@@ -77,9 +77,14 @@ export const parse = (
   const chunks: Buffer[] = [];
   const readLimit = limit ?? null;
   let totalRead = 0;
+  let done = false;
   const queue = new AsyncQueue<unknown>();
   // Accumulate chunks, attempting to parse linebreak-delimited data.
   stream.on("data", (data) => {
+    if (done) {
+      logger.warn("Ignoring data event after reaching read limit");
+      return;
+    }
     const rawData = Buffer.isBuffer(data) ? data : Buffer.from(data);
     const bytesRead =
       readLimit !== null
@@ -106,18 +111,21 @@ export const parse = (
     }
     if (readLimit !== null && totalRead >= readLimit) {
       logger.info("Parsed stream achieved limit", readLimit);
-      stream.destroy();
+      done = true;
+      stream.emit("end");
     }
   });
   // Attempt to parse whatever was left.
   stream.on("end", () => {
     logger.debug("Parsed stream ended");
+    done = true;
     extractLinesIntoQueue(Buffer.concat(chunks), queue, true);
     queue.close();
   });
   // Attempt to parse whatever was left.
   stream.on("error", (err) => {
     logger.warn("Parsed stream reported error:", new String(err));
+    done = true;
     extractLinesIntoQueue(Buffer.concat(chunks), queue, true);
     queue.close();
   });

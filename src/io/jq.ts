@@ -55,6 +55,17 @@ export const closeInstances = (): void => {
 };
 
 /**
+ * Checks the health of the current state. A healthy status is one
+ * where all of the spawned processes are still running.
+ *
+ * @returns A boolean indicating the health status.
+ */
+export const isHealthy = (): boolean =>
+  Array.from(instances.values()).every(
+    (instance) => instance.exitCode === null
+  );
+
+/**
  * Wraps a jq expression so that execution failures don't crash the jq
  * process.
  */

@@ -1,0 +1,9 @@
+name: "Basic HTTP input"
+input:
+  http:
+    endpoint: /events
+    port: 8000
+steps:
+  print:
+    flatmap:
+      send-stdout:

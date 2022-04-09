@@ -34,6 +34,48 @@ export const INPUT_DRAIN_TIMEOUT: number = parseFloat(
 );
 
 /**
+ * The default port used for listening for HTTP requests.
+ */
+export const HTTP_SERVER_DEFAULT_PORT: number = parseInt(
+  process.env.HTTP_SERVER_DEFAULT_PORT ?? "8000",
+  10
+);
+
+/**
+ * The address used to listen for HTTP requests. Default is to listen
+ * on all interfaces.
+ */
+export const HTTP_SERVER_LISTEN_ADDRESS: string =
+  process.env.HTTP_SERVER_LISTEN_ADDRESS ?? "0.0.0.0";
+
+/**
+ * The TCP backlog size for the HTTP server.
+ */
+export const HTTP_SERVER_LISTEN_BACKLOG: number = parseInt(
+  process.env.HTTP_SERVER_LISTEN_BACKLOG ?? "511",
+  10
+);
+
+/**
+ * The endpoint which will expose the application's health status (an
+ * empty, successful response).
+ */
+export const HTTP_SERVER_HEALTH_ENDPOINT: string =
+  process.env.HTTP_SERVER_HEALTH_ENDPOINT ?? "/healthz";
+
+/**
+ * The endpoint which will expose prometheus metrics. Set to the empty
+ * string to disable metrics exposition.
+ */
+export const HTTP_SERVER_METRICS_ENDPOINT: string =
+  process.env.HTTP_SERVER_METRICS_ENDPOINT ?? "/metrics";
+
+/**
+ * The prefix used in prometheus metric names.
+ */
+export const METRICS_PREFIX: string = process.env.METRICS_PREFIX ?? "cdp_";
+
+/**
  * The timeout used for emitted HTTP requests.
  */
 export const HTTP_CLIENT_TIMEOUT: number = parseInt(

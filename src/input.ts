@@ -1,6 +1,8 @@
-import { Channel } from "./async-queue";
+import { Channel, AsyncQueue } from "./async-queue";
+import { HTTP_SERVER_DEFAULT_PORT } from "./conf";
 import { Event, makeNewEventParser, parseChannel } from "./event";
 import { parse } from "./io/read-stream";
+import { makeHTTPServer } from "./io/http-server";
 import { makeLogger } from "./utils";
 
 /**
@@ -78,5 +80,36 @@ export const makeHTTPInput = (
   pipelineSignature: string,
   options: string | { endpoint: string; port?: number | string }
 ): [Channel<never, Event>, Promise<void>] => {
-  throw new Error("TODO: http input not implemented");
+  const endpoint = typeof options === "string" ? options : options.endpoint;
+  const rawPort: number | string =
+    typeof options === "string"
+      ? HTTP_SERVER_DEFAULT_PORT
+      : options.port ?? HTTP_SERVER_DEFAULT_PORT;
+  const port = typeof rawPort === "string" ? parseInt(rawPort) : rawPort;
+  const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
+  const queue = new AsyncQueue<unknown>();
+  const server = makeHTTPServer(endpoint, port, async (ctx) => {
+    for await (const thing of parse(ctx.req, ctx.request.length)) {
+      queue.push(thing);
+    }
+  });
+  const channel = queue.asChannel();
+  return [
+    parseChannel(
+      {
+        ...channel,
+        send: () => {
+          logger.warn("Can't send events to an input channel");
+          return false;
+        },
+        close: async () => {
+          await server.close();
+          await channel.close();
+        },
+      },
+      eventParser,
+      "parsing HTTP request body"
+    ),
+    server.closed,
+  ];
 };

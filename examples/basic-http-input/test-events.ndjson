@@ -1,0 +1,5 @@
+{"n": "foo", "d": "A simple foo"}
+[{"n": "foo", "d": "A foo with company"}, {"n": "bar", "d": "A healthy bar"}]
+{"n": "foo", "d": null}
+{"n": "foo"}
+{"n": "bar", "d": "A couple of empty foos just went by."}
