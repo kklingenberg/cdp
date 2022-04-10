@@ -9,6 +9,7 @@ const dummyStepFactory = async () => new AsyncQueue<Event>().asChannel();
 
 test("Pipeline validation detects usage of the reserved step name", () => {
   const pipeline = {
+    name: "Test",
     steps: [
       {
         name: "foo",
@@ -27,6 +28,7 @@ test("Pipeline validation detects usage of the reserved step name", () => {
 
 test("Pipeline validation detects duplicate step names", () => {
   const pipeline = {
+    name: "Test",
     steps: [
       {
         name: "foo",
@@ -50,6 +52,7 @@ test("Pipeline validation detects duplicate step names", () => {
 
 test("Pipeline validation detects dangling dependencies", () => {
   const pipeline = {
+    name: "Test",
     steps: [
       {
         name: "foo",
@@ -68,6 +71,7 @@ test("Pipeline validation detects dangling dependencies", () => {
 
 test("Pipeline validation accepts a direct dependency to the input alias", () => {
   const pipeline = {
+    name: "Test",
     steps: [
       {
         name: "foo",
@@ -86,6 +90,7 @@ test("Pipeline validation accepts a direct dependency to the input alias", () =>
 
 test("Pipeline validation detects a trivial graph cycle", () => {
   const pipeline = {
+    name: "Test",
     steps: [
       {
         name: "foo",
@@ -99,6 +104,7 @@ test("Pipeline validation detects a trivial graph cycle", () => {
 
 test("Pipeline validation detects a graph cycle of greater length", () => {
   const pipeline = {
+    name: "Test",
     steps: [
       {
         name: "foo",
@@ -124,6 +130,7 @@ test("Pipeline validation detects a graph cycle of greater length", () => {
 
 test("Pipeline validation accepts shared dependencies", () => {
   const pipeline = {
+    name: "Test",
     steps: [
       {
         name: "foo",

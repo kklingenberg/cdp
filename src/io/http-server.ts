@@ -28,10 +28,6 @@ interface HTTPServer {
  */
 const METRICS_CONTENT_TYPE = "text/plain; version=0.0.4";
 
-// Collect metrics provided by the client library.
-// Source: https://github.com/siimon/prom-client#default-metrics
-client.collectDefaultMetrics();
-
 /**
  * A server is built from a single handler. The server then listens
  * for POST requests at the specified endpoint, applies the handler

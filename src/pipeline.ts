@@ -1,6 +1,7 @@
 import { AsyncQueue } from "./async-queue";
 import * as deadLetter from "./dead-letter";
 import { Event } from "./event";
+import { stepEvents } from "./metrics";
 import { Step, StepFactory } from "./step";
 import { makeLogger, resolveAfter } from "./utils";
 
@@ -24,6 +25,7 @@ export interface StepDefinition {
  * its execution. It essentially reduces to a DAG of pipeline steps.
  */
 export interface Pipeline {
+  name: string;
   steps: StepDefinition[];
 }
 
@@ -148,12 +150,23 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
   const deadEvents: Event[] = [];
   const makeSender =
     (index: number) =>
-    (...events: Event[]) =>
-      events.forEach((event) => {
+    (...events: Event[]) => {
+      // Increase out-flow metrics of step.
+      stepEvents.inc(
+        {
+          pipeline: pipeline.name,
+          step: pipeline.steps[index].name,
+          flow: "out",
+        },
+        events.length
+      );
+      // Send the event to the bus queue.
+      return events.forEach((event) => {
         if (!busQueue.push([index, event])) {
           deadEvents.push(event);
         }
       });
+    };
   const steps: Map<number, Step> = new Map(
     await Promise.all(
       pipeline.steps.map(
@@ -166,6 +179,15 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
   async function* digestEvents() {
     for await (const [sourceNodeIndex, event] of busQueue.iterator()) {
       const nextNodeIndices = edges.get(sourceNodeIndex) ?? [];
+      // Increase in-flow metrics of next steps.
+      nextNodeIndices.forEach((nodeIndex) =>
+        stepEvents.inc({
+          pipeline: pipeline.name,
+          step: pipeline.steps[nodeIndex].name,
+          flow: "in",
+        })
+      );
+      // Send the events to the next steps.
       const sent = nextNodeIndices
         .map((nodeIndex) => (steps.get(nodeIndex) as Step).send(event))
         .every((s) => s);

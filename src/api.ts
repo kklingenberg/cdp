@@ -1,7 +1,8 @@
-import { Channel, compose } from "./async-queue";
+import { Channel, flatMap, compose } from "./async-queue";
 import { INPUT_DRAIN_TIMEOUT } from "./conf";
 import { Event } from "./event";
 import { makeSTDINInput, makeHTTPInput } from "./input";
+import { pipelineEvents, stepEvents } from "./metrics";
 import { Pattern, patternSchema, isValidPattern } from "./pattern";
 import { StepDefinition, Pipeline, validate, run } from "./pipeline";
 import { makeWindowed } from "./step";
@@ -536,6 +537,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   // 3. Check the pipeline's graph soundness.
   const dummyStepFactory = () => Promise.reject("not a real step factory");
   const dummyPipeline: Pipeline = {
+    name: `${thing.name} -- validation`,
     steps: Object.entries(steps ?? {}).map(([name, definition]) => ({
       name,
       after: definition.after ?? [],
@@ -559,8 +561,11 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
 export const runPipeline = async (
   template: PipelineTemplate
 ): Promise<[Promise<void>, () => void]> => {
-  const signature = await getSignature(template);
+  // Zero pipeline metrics.
+  pipelineEvents.inc({ pipeline: template.name, flow: "in" }, 0);
+  pipelineEvents.inc({ pipeline: template.name, flow: "out" }, 0);
   // Create the input channel.
+  const signature = await getSignature(template);
   let inputChannel: Channel<never, Event>;
   let inputEnded: Promise<void>;
   const inputKey = Object.keys(template.input)[0];
@@ -584,6 +589,10 @@ export const runPipeline = async (
   // Create the pipeline channel.
   const steps: StepDefinition[] = [];
   for (const [name, definition] of Object.entries(template.steps ?? {})) {
+    // Zero step metrics.
+    stepEvents.inc({ pipeline: template.name, step: name, flow: "in" }, 0);
+    stepEvents.inc({ pipeline: template.name, step: name, flow: "out" }, 0);
+    // Extract parameters.
     const window = definition.window ?? { events: 1, seconds: -1 };
     const patternMode: "pass" | "drop" =
       "match/drop" in definition ? "drop" : "pass";
@@ -681,14 +690,20 @@ export const runPipeline = async (
       factory,
     });
   }
-  const pipelineChannel = await run({ steps });
+  const pipelineChannel = await run({ name: template.name, steps });
   // Connect the input's data to the pipeline.
-  const connectedChannel = compose(pipelineChannel, inputChannel);
+  const connectedChannel = compose(
+    pipelineChannel,
+    flatMap(async (e: Event) => {
+      pipelineEvents.inc({ pipeline: template.name, flow: "in" }, 1);
+      return [e];
+    }, inputChannel)
+  );
   // Start it up.
   const operate = async (): Promise<void> => {
     for await (const event of connectedChannel.receive) {
-      // Here, `event` already went through the whole
-      // pipeline. Nothing else needs to be done.
+      // `event` already went through the whole pipeline.
+      pipelineEvents.inc({ pipeline: template.name, flow: "out" }, 1);
       logger.debug("Event", event.signature, "reached the end of the pipeline");
     }
   };
