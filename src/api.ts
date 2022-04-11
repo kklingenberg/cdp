@@ -279,6 +279,7 @@ interface SendReceiveJqFunctionTemplate {
     | string
     | {
         ["jq-expr"]: string;
+        wrap?: string;
       };
 }
 const sendReceiveJqFunctionTemplateSchema = {
@@ -291,6 +292,7 @@ const sendReceiveJqFunctionTemplateSchema = {
           type: "object",
           properties: {
             "jq-expr": { type: "string", minLength: 1 },
+            wrap: { type: "string", minLength: 1 },
           },
           additionalProperties: false,
           required: ["jq-expr"],
@@ -315,6 +317,7 @@ interface SendReceiveHTTPFunctionTemplate {
         target: string;
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
+        wrap?: string;
       };
 }
 const sendReceiveHTTPFunctionTemplateSchema = {
@@ -339,6 +342,7 @@ const sendReceiveHTTPFunctionTemplateSchema = {
                 ],
               },
             },
+            wrap: { type: "string", minLength: 1 },
           },
           additionalProperties: false,
           required: ["target"],
@@ -605,6 +609,30 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
             `step '${name}' uses an invalid rename.prepend value: ` +
               "it must be a proper event name prefix"
           );
+        }
+      }
+    }
+    // 2.5.3 If using send-receive-jq or send-receive-http, check that
+    // the wrap option is valid, if given.
+    if ("send-receive-jq" in fn) {
+      if (typeof fn["send-receive-jq"] !== "string") {
+        if (typeof fn["send-receive-jq"].wrap === "string") {
+          if (!isValidEventName(fn["send-receive-jq"].wrap)) {
+            throw new Error(
+              `step '${name}' uses an invalid wrap option: it must be a proper event name`
+            );
+          }
+        }
+      }
+    }
+    if ("send-receive-http" in fn) {
+      if (typeof fn["send-receive-http"] !== "string") {
+        if (typeof fn["send-receive-http"].wrap === "string") {
+          if (!isValidEventName(fn["send-receive-http"].wrap)) {
+            throw new Error(
+              `step '${name}' uses an invalid wrap option: it must be a proper event name`
+            );
+          }
         }
       }
     }

@@ -5,7 +5,7 @@ import {
   HTTP_CLIENT_MAX_REDIRECTS,
   HTTP_CLIENT_MAX_CONTENT_LENGTH,
 } from "../conf";
-import { Event, makeOldEventParser, parseVector } from "../event";
+import { Event, makeOldEventParser, parseVector, makeWrapper } from "../event";
 import { makeLogger } from "../utils";
 import { parse } from "./read-stream";
 
@@ -110,6 +110,8 @@ export const sendThing = (
  * @param headers The headers to use with the request. Any
  * content-type header will be overwritten with
  * 'application/x-ndjson'.
+ * @param wrap An optional event name in case the response is to be
+ * wrapped in a brand-new event envelope.
  * @returns A promise that resolves to the parsed events extracted
  * from the response, or an empty array if any error occurred.
  */
@@ -118,8 +120,11 @@ export const sendReceiveEvents = async (
   pipelineName: string,
   pipelineSignature: string,
   target: string,
-  headers: { [key: string]: string | number | boolean }
+  headers: { [key: string]: string | number | boolean },
+  wrap?: string
 ): Promise<Event[]> => {
+  const oldEventParser = makeOldEventParser(pipelineName, pipelineSignature);
+  const wrapper = makeWrapper(wrap);
   try {
     const response = await axiosInstance.post(target, events, {
       transformRequest: [
@@ -132,11 +137,10 @@ export const sendReceiveEvents = async (
       events.length,
       "events"
     );
-    const oldEventParser = makeOldEventParser(pipelineName, pipelineSignature);
     const responseEvents = [];
     for await (const responseThing of parse(response.data)) {
       for (const event of await parseVector(
-        responseThing,
+        wrapper(responseThing),
         oldEventParser,
         "parsing HTTP response"
       )) {
@@ -173,6 +177,8 @@ export const sendReceiveEvents = async (
  * for parsing events.
  * @param target The fully qualified URI of the target.
  * @param headers The headers to use with the request.
+ * @param wrap An optional event name in case the response is to be
+ * wrapped in a brand-new event envelope.
  * @returns A promise that resolves to the parsed events extracted
  * from the response, or an empty array if any error occurred.
  */
@@ -181,8 +187,11 @@ export const sendReceiveThing = async (
   pipelineName: string,
   pipelineSignature: string,
   target: string,
-  headers: { [key: string]: string | number | boolean }
+  headers: { [key: string]: string | number | boolean },
+  wrap?: string
 ): Promise<Event[]> => {
+  const oldEventParser = makeOldEventParser(pipelineName, pipelineSignature);
+  const wrapper = makeWrapper(wrap);
   try {
     const response = await axiosInstance.post(target, thing, {
       transformRequest: [
@@ -191,11 +200,10 @@ export const sendReceiveThing = async (
       headers,
     });
     logger.debug("sendReceiveThing successfully forwarded its payload");
-    const oldEventParser = makeOldEventParser(pipelineName, pipelineSignature);
     const responseEvents = [];
     for await (const responseThing of parse(response.data)) {
       for (const event of await parseVector(
-        responseThing,
+        wrapper(responseThing),
         oldEventParser,
         "parsing HTTP response"
       )) {

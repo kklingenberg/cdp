@@ -1,5 +1,5 @@
-import { Channel } from "../async-queue";
-import { Event, makeOldEventParser, parseChannel } from "../event";
+import { Channel, flatMap } from "../async-queue";
+import { Event, makeOldEventParser, parseChannel, makeWrapper } from "../event";
 import { makeChannel } from "../io/jq";
 
 /**
@@ -13,10 +13,17 @@ import { makeChannel } from "../io/jq";
 export const make = async (
   pipelineName: string,
   pipelineSignature: string,
-  options: string | { ["jq-expr"]: string }
+  options: string | { ["jq-expr"]: string; wrap?: string }
 ): Promise<Channel<Event[], Event>> => {
   const program = typeof options === "string" ? options : options["jq-expr"];
+  const wrapper = makeWrapper(
+    (typeof options === "string" ? {} : options).wrap
+  );
   const parser = makeOldEventParser(pipelineName, pipelineSignature);
   const channel: Channel<Event[], unknown> = await makeChannel(program);
-  return parseChannel(channel, parser, "parsing jq output");
+  return parseChannel(
+    flatMap(async (d) => [wrapper(d)], channel),
+    parser,
+    "parsing jq output"
+  );
 };

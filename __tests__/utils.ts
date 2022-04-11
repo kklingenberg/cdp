@@ -1,5 +1,18 @@
 import * as utils from "../src/utils";
 
+// Mock for console.error.
+let mockedConsoleError: jest.SpyInstance<void>;
+
+beforeEach(() => {
+  mockedConsoleError = jest.spyOn(console, "error").mockImplementation(() => {
+    // Prevent error messages during these tests.
+  });
+});
+
+afterEach(() => {
+  mockedConsoleError.mockRestore();
+});
+
 test("Signatures can be obtained for any JSON-encodable thing", async () => {
   const signature = await utils.getSignature(
     "foo",
@@ -25,6 +38,9 @@ test("Loggers can be created according to the current log level", () => {
   expect(logger.info("this message was not expected")).toBeNull();
   expect(logger.warn("this message was not expected")).toBeNull();
   expect(logger.error("this message is expected")).toBeUndefined();
+  expect(mockedConsoleError.mock.calls).toEqual([
+    ["ERROR at test:", "this message is expected"],
+  ]);
 });
 
 test("Environment variables can be replaced in objects", () => {

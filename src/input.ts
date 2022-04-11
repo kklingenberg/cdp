@@ -1,6 +1,6 @@
 import { Channel, AsyncQueue } from "./async-queue";
 import { HTTP_SERVER_DEFAULT_PORT } from "./conf";
-import { Event, makeNewEventParser, parseChannel } from "./event";
+import { Event, makeNewEventParser, parseChannel, makeWrapper } from "./event";
 import { parse } from "./io/read-stream";
 import { makeHTTPServer } from "./io/http-server";
 import { makeLogger } from "./utils";
@@ -28,10 +28,7 @@ export const makeSTDINInput = (
   pipelineSignature: string,
   options: { wrap?: string } | null
 ): [Channel<never, Event>, Promise<void>] => {
-  const wrapper: (d: unknown) => unknown =
-    options !== null && typeof options.wrap === "string"
-      ? ((n) => (d) => ({ n, d }))(options.wrap)
-      : (d) => d;
+  const wrapper = makeWrapper(options?.wrap);
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const rawReceive = parse(process.stdin);
   let notifyDrained: () => void;
@@ -82,10 +79,9 @@ export const makeHTTPInput = (
   pipelineSignature: string,
   options: string | { endpoint: string; port?: number | string; wrap?: string }
 ): [Channel<never, Event>, Promise<void>] => {
-  const wrapper: (d: unknown) => unknown =
-    typeof options !== "string" && typeof options.wrap === "string"
-      ? ((n) => (d) => ({ n, d }))(options.wrap)
-      : (d) => d;
+  const wrapper = makeWrapper(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
   const endpoint = typeof options === "string" ? options : options.endpoint;
   const rawPort: number | string =
     typeof options === "string"

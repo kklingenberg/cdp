@@ -24,10 +24,12 @@ export const make = async (
         target: string;
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
+        wrap?: string;
       }
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
   const headers = typeof options === "string" ? {} : options.headers ?? {};
+  const wrap = typeof options === "string" ? undefined : options.wrap;
   if (typeof options !== "string" && typeof options["jq-expr"] === "string") {
     const jqChannel: Channel<Event[], unknown> = await makeChannel(
       options["jq-expr"]
@@ -39,7 +41,8 @@ export const make = async (
           pipelineName,
           pipelineSignature,
           target,
-          headers
+          headers,
+          wrap
         ),
       jqChannel
     );
@@ -52,7 +55,8 @@ export const make = async (
           pipelineName,
           pipelineSignature,
           target,
-          headers
+          headers,
+          wrap
         ),
       queue.asChannel()
     );
