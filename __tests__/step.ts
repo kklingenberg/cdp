@@ -4,6 +4,7 @@ import { makeWindowingChannel } from "../src/step";
 import { resolveAfter } from "../src/utils";
 
 test("A size-1 windowed channel doesn't care about timeouts", async () => {
+  // Arrange
   const channel = makeWindowingChannel({
     name: "test",
     windowMaxSize: 1,
@@ -11,6 +12,7 @@ test("A size-1 windowed channel doesn't care about timeouts", async () => {
     patternMode: "pass",
     functionMode: "flatmap",
   });
+  // Act
   channel.send(
     await makeEvent("test", 1, [{ i: 0, p: "test", h: "test" }]),
     await makeEvent("test", 2, [{ i: 0, p: "test", h: "test" }]),
@@ -21,10 +23,12 @@ test("A size-1 windowed channel doesn't care about timeouts", async () => {
     consume(channel.receive),
     channel.close(),
   ]);
+  // Assert
   expect(values.map((x) => x.map((y) => y.data))).toEqual([[1], [2], [3], [4]]);
 });
 
 test("A windowed channel truncates the last group after being closed", async () => {
+  // Arrange
   const channel = makeWindowingChannel({
     name: "test",
     windowMaxSize: 3,
@@ -32,6 +36,7 @@ test("A windowed channel truncates the last group after being closed", async () 
     patternMode: "pass",
     functionMode: "flatmap",
   });
+  // Act
   channel.send(
     await makeEvent("test", 1, [{ i: 0, p: "test", h: "test" }]),
     await makeEvent("test", 2, [{ i: 0, p: "test", h: "test" }]),
@@ -43,6 +48,7 @@ test("A windowed channel truncates the last group after being closed", async () 
     consume(channel.receive),
     channel.close(),
   ]);
+  // Assert
   expect(values.map((x) => x.map((y) => y.data))).toEqual([
     [1, 2, 3],
     [2, 3, 4],
@@ -53,6 +59,7 @@ test("A windowed channel truncates the last group after being closed", async () 
 });
 
 test("A windowed channel using reduce mode creates disjoint groups", async () => {
+  // Arrange
   const channel = makeWindowingChannel({
     name: "test",
     windowMaxSize: 2,
@@ -60,6 +67,7 @@ test("A windowed channel using reduce mode creates disjoint groups", async () =>
     patternMode: "pass",
     functionMode: "reduce",
   });
+  // Act
   channel.send(
     await makeEvent("test", 1, [{ i: 0, p: "test", h: "test" }]),
     await makeEvent("test", 2, [{ i: 0, p: "test", h: "test" }]),
@@ -70,6 +78,7 @@ test("A windowed channel using reduce mode creates disjoint groups", async () =>
     consume(channel.receive),
     channel.close(),
   ]);
+  // Assert
   expect(values.map((x) => x.map((y) => y.data))).toEqual([
     [1, 2],
     [3, 4],
@@ -77,6 +86,7 @@ test("A windowed channel using reduce mode creates disjoint groups", async () =>
 });
 
 test("A windowed channel uses its timeout to produce partial groups", async () => {
+  // Arrange
   const channel = makeWindowingChannel({
     name: "test",
     windowMaxSize: 2,
@@ -84,6 +94,7 @@ test("A windowed channel uses its timeout to produce partial groups", async () =
     patternMode: "pass",
     functionMode: "reduce",
   });
+  // Act
   channel.send(
     await makeEvent("test", 1, [{ i: 0, p: "test", h: "test" }]),
     await makeEvent("test", 2, [{ i: 0, p: "test", h: "test" }]),
@@ -95,5 +106,6 @@ test("A windowed channel uses its timeout to produce partial groups", async () =
     consume(channel.receive),
     channel.close(),
   ]);
+  // Assert
   expect(values.map((x) => x.map((y) => y.data))).toEqual([[1, 2], [3], [4]]);
 });

@@ -26,3 +26,20 @@ test("Loggers can be created according to the current log level", () => {
   expect(logger.warn("this message was not expected")).toBeNull();
   expect(logger.error("this message is expected")).toBeUndefined();
 });
+
+test("Environment variables can be replaced in objects", () => {
+  const obj = {
+    foo: "bar ${NODE_ENV}",
+    baz: ["stuff", { "${NODE_ENV} key": "Look at this!" }],
+    $NODE_ENV: "doesn't work",
+    "${NODE_ENV }": "doesn't work either",
+    "${NONEXISTENT_HOPEFULLY}": "this one does, although it may cause trouble",
+  };
+  expect(utils.envsubst(obj)).toEqual({
+    foo: "bar test",
+    baz: ["stuff", { "test key": "Look at this!" }],
+    $NODE_ENV: "doesn't work",
+    "${NODE_ENV }": "doesn't work either",
+    "": "this one does, although it may cause trouble",
+  });
+});

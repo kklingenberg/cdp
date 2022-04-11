@@ -1,3 +1,4 @@
+import { Server } from "http";
 import Koa from "koa";
 import client from "prom-client";
 import { isHealthy } from "./jq";
@@ -18,6 +19,8 @@ const logger = makeLogger("io/http-server");
  * A server can be asked to be closed, and checked if it's closed.
  */
 interface HTTPServer {
+  app: Koa<Koa.DefaultState, Koa.DefaultContext>;
+  server: Server;
   close: () => Promise<void>;
   closed: Promise<void>;
 }
@@ -54,8 +57,6 @@ export const makeHTTPServer = (
       if (ctx.request.method === "POST" && ctx.request.path === endpoint) {
         logger.info("Received events payload:", ctx.request.length, "bytes");
         await handler(ctx);
-        ctx.body = JSON.stringify({ acknowledged: true });
-        ctx.type = "application/json";
       } else if (
         ctx.request.method === "GET" &&
         ctx.request.path === HTTP_SERVER_HEALTH_ENDPOINT
@@ -81,8 +82,6 @@ export const makeHTTPServer = (
           ctx.request.method,
           ctx.request.path
         );
-        ctx.body = JSON.stringify({ error: "Not Found" });
-        ctx.type = "application/json";
         ctx.status = 404;
       }
     })
@@ -99,6 +98,8 @@ export const makeHTTPServer = (
       }
     );
   return {
+    app,
+    server,
     close: async () => {
       server.close(() => notifyClosed());
       await closed;

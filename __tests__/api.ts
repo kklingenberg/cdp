@@ -1,6 +1,7 @@
 import { makePipelineTemplate } from "../src/api";
 
 test("Pipeline template construction works normally", () => {
+  // Arrange
   const raw = {
     name: "Test",
     input: { stdin: {} },
@@ -26,27 +27,33 @@ test("Pipeline template construction works normally", () => {
       },
     },
   };
+  // Act & assert
   expect(() => makePipelineTemplate(raw)).not.toThrow();
 });
 
 test("Pipeline template construction works on empty pipelines", () => {
+  // Arrange
   const raw = {
     name: "Test",
     input: { stdin: {} },
   };
+  // Act & assert
   expect(() => makePipelineTemplate(raw)).not.toThrow();
 });
 
 test("Pipeline template construction accepts extra keys at the root", () => {
+  // Arrange
   const raw = {
     name: "Test",
     input: { stdin: {} },
     extraKey: "This value is not explicitly used by CDP",
   };
+  // Act & assert
   expect(() => makePipelineTemplate(raw)).not.toThrow();
 });
 
 test("The function keep-when must hold a valid schema", () => {
+  // Arrange
   const raw = {
     name: "Test",
     input: { stdin: {} },
@@ -54,5 +61,6 @@ test("The function keep-when must hold a valid schema", () => {
       a: { flatmap: { "keep-when": { not: "a real schema" } } },
     },
   };
+  // Act & assert
   expect(() => makePipelineTemplate(raw)).toThrow();
 });

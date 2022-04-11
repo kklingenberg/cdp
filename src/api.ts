@@ -3,7 +3,12 @@ import { INPUT_DRAIN_TIMEOUT } from "./conf";
 import { Event } from "./event";
 import { makeSTDINInput, makeHTTPInput } from "./input";
 import { pipelineEvents, stepEvents } from "./metrics";
-import { Pattern, patternSchema, isValidPattern } from "./pattern";
+import {
+  isValidEventName,
+  Pattern,
+  patternSchema,
+  isValidPattern,
+} from "./pattern";
 import { StepDefinition, Pipeline, validate, run } from "./pipeline";
 import { makeWindowed } from "./step";
 import { make as makeDeduplicateFunction } from "./step-functions/deduplicate";
@@ -25,14 +30,19 @@ const logger = makeLogger("api");
  * The `stdin` input form ingests events from STDIN.
  */
 interface STDINInputTemplate {
-  stdin: Record<string, never> | null;
+  stdin: { wrap?: string } | null;
 }
 const stdinInputTemplateSchema = {
   type: "object",
   properties: {
     stdin: {
       anyOf: [
-        { type: "object", properties: {}, additionalProperties: false },
+        {
+          type: "object",
+          properties: { wrap: { type: "string", minLength: 1 } },
+          additionalProperties: false,
+          required: [],
+        },
         { type: "null" },
       ],
     },
@@ -50,6 +60,7 @@ interface HTTPInputTemplate {
     | {
         endpoint: string;
         port?: number | string;
+        wrap?: string;
       };
 }
 const httpInputTemplateSchema = {
@@ -67,6 +78,10 @@ const httpInputTemplateSchema = {
                 { type: "integer", minimum: 1, maximum: 65535 },
                 { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
               ],
+            },
+            wrap: {
+              type: "string",
+              minLength: 1,
             },
           },
           additionalProperties: false,
@@ -462,10 +477,11 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   }
   // Explicitly check what the schema couldn't declare as a
   // restriction.
-  // 1. Check that the input port is valid, if given as a string.
+  // 1. Check the input forms.
   const { input } = thing as { input: object };
   if ("http" in input) {
     const { http } = input as { http: object };
+    // 1.1 Check that the input port is valid, if given as a string.
     if (typeof http === "object" && "port" in http) {
       const { port } = http as { port: unknown };
       if (typeof port === "string") {
@@ -475,6 +491,27 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
             "the input's http port is invalid (must be between 1 and 65535, inclusive)"
           );
         }
+      }
+    }
+    // 1.2 Check that the wrap string is a valid event name, if given.
+    if (typeof http === "object" && "wrap" in http) {
+      const { wrap } = http as { wrap: string };
+      if (!isValidEventName(wrap)) {
+        throw new Error(
+          "the input's wrap option is invalid: it must be a proper event name"
+        );
+      }
+    }
+  }
+  if ("stdin" in input) {
+    const { stdin } = input as { stdin: object | null };
+    // 1.3 Check that the wrap string is a valid event name, if given.
+    if (stdin !== null && "wrap" in stdin) {
+      const { wrap } = stdin as { wrap: string };
+      if (!isValidEventName(wrap)) {
+        throw new Error(
+          "the input's wrap option is invalid: it must be a proper event name"
+        );
       }
     }
   }
@@ -531,6 +568,44 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
             ajv.errors?.map((error) => error.message).join("; ") ??
             "invalid schema"
         );
+      }
+    }
+    // 2.5.2 If using rename, the replacement, prefix and suffix must
+    // be valid.
+    if ("rename" in fn) {
+      if ("replace" in fn.rename) {
+        if (!isValidEventName(fn.rename.replace)) {
+          throw new Error(
+            `step '${name}' uses an invalid rename.replace value: ` +
+              "it must be a proper event name"
+          );
+        }
+      }
+      if ("append" in fn.rename) {
+        if (
+          (fn.rename.append.startsWith(".") &&
+            !isValidEventName(fn.rename.append.slice(1))) ||
+          (!fn.rename.append.startsWith(".") &&
+            !isValidEventName(fn.rename.append))
+        ) {
+          throw new Error(
+            `step '${name}' uses an invalid rename.append value: ` +
+              "it must be a proper event name suffix"
+          );
+        }
+      }
+      if ("prepend" in fn.rename) {
+        if (
+          (fn.rename.prepend.endsWith(".") &&
+            !isValidEventName(fn.rename.prepend.slice(0, -1))) ||
+          (!fn.rename.append.endsWith(".") &&
+            !isValidEventName(fn.rename.prepend))
+        ) {
+          throw new Error(
+            `step '${name}' uses an invalid rename.prepend value: ` +
+              "it must be a proper event name prefix"
+          );
+        }
       }
     }
   });

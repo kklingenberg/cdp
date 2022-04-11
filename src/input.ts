@@ -26,10 +26,12 @@ const logger = makeLogger("input");
 export const makeSTDINInput = (
   pipelineName: string,
   pipelineSignature: string,
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  options: Record<string, never> | null
-  /* eslint-enable @typescript-eslint/no-unused-vars */
+  options: { wrap?: string } | null
 ): [Channel<never, Event>, Promise<void>] => {
+  const wrapper: (d: unknown) => unknown =
+    options !== null && typeof options.wrap === "string"
+      ? ((n) => (d) => ({ n, d }))(options.wrap)
+      : (d) => d;
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const rawReceive = parse(process.stdin);
   let notifyDrained: () => void;
@@ -38,7 +40,7 @@ export const makeSTDINInput = (
   });
   async function* receive() {
     for await (const value of rawReceive) {
-      yield value;
+      yield wrapper(value);
     }
     notifyDrained();
   }
@@ -78,8 +80,12 @@ export const makeSTDINInput = (
 export const makeHTTPInput = (
   pipelineName: string,
   pipelineSignature: string,
-  options: string | { endpoint: string; port?: number | string }
+  options: string | { endpoint: string; port?: number | string; wrap?: string }
 ): [Channel<never, Event>, Promise<void>] => {
+  const wrapper: (d: unknown) => unknown =
+    typeof options !== "string" && typeof options.wrap === "string"
+      ? ((n) => (d) => ({ n, d }))(options.wrap)
+      : (d) => d;
   const endpoint = typeof options === "string" ? options : options.endpoint;
   const rawPort: number | string =
     typeof options === "string"
@@ -90,7 +96,7 @@ export const makeHTTPInput = (
   const queue = new AsyncQueue<unknown>();
   const server = makeHTTPServer(endpoint, port, async (ctx) => {
     for await (const thing of parse(ctx.req, ctx.request.length)) {
-      queue.push(thing);
+      queue.push(wrapper(thing));
     }
   });
   const channel = queue.asChannel();
