@@ -1,30 +1,12 @@
-import HttpAgent, { HttpsAgent } from "agentkeepalive";
-import axios from "axios";
-import {
-  HTTP_CLIENT_TIMEOUT,
-  HTTP_CLIENT_MAX_REDIRECTS,
-  HTTP_CLIENT_MAX_CONTENT_LENGTH,
-} from "../conf";
 import { Event, makeOldEventParser, parseVector, makeWrapper } from "../event";
 import { makeLogger } from "../utils";
+import { axiosInstance } from "./axios";
 import { parse } from "./read-stream";
 
 /**
  * A logger instance namespaced to this module.
  */
 const logger = makeLogger("io/http-client");
-
-/**
- * The axios instance used to emit all http requests.
- */
-export const axiosInstance = axios.create({
-  timeout: HTTP_CLIENT_TIMEOUT,
-  httpAgent: new HttpAgent(),
-  httpsAgent: new HttpsAgent(),
-  maxRedirects: HTTP_CLIENT_MAX_REDIRECTS,
-  maxContentLength: HTTP_CLIENT_MAX_CONTENT_LENGTH,
-  responseType: "stream",
-});
 
 /**
  * Sends events to the specified HTTP target, and ignore the response
