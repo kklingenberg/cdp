@@ -53,6 +53,11 @@ const makeMatcher = (
 };
 
 /**
+ * Internal type used to refer to a window in the making.
+ */
+type Group = { events: Event[]; timeout: ReturnType<typeof setTimeout> | null };
+
+/**
  * Build a windowing channel that accumulates events in windows of the
  * configured size before forwarding them to the processing function.
  *
@@ -65,7 +70,7 @@ export const makeWindowingChannel = (
   options: StepOptions
 ): Channel<Event, Event[]> => {
   const queue = new AsyncQueue<Event[]>();
-  const currentGroups: Map<number, Event[]> = new Map();
+  const currentGroups: Map<number, Group> = new Map();
   let currentGroupIndex = 0;
   const timeWindow =
     options.windowMaxSize <= 1 ? -1 : (options.windowMaxDuration ?? -1) * 1000;
@@ -82,22 +87,27 @@ export const makeWindowingChannel = (
   const sendOne = (event: Event): boolean => {
     const newGroup = !currentGroups.has(currentGroupIndex);
     if (newGroup) {
-      currentGroups.set(currentGroupIndex, []);
+      const group: Group = {
+        events: [],
+        timeout: null,
+      };
+      currentGroups.set(currentGroupIndex, group);
+      if (timeWindow >= 0) {
+        const timeout = setTimeout(
+          (index) => {
+            if (currentGroups.has(index)) {
+              const timedOutGroup = (currentGroups.get(index) as Group).events;
+              currentGroups.delete(index);
+              queue.push(timedOutGroup);
+            }
+          },
+          timeWindow,
+          currentGroupIndex
+        );
+        group.timeout = timeout;
+      }
     }
-    currentGroups.forEach((g) => g.push(event));
-    if (newGroup && timeWindow >= 0) {
-      setTimeout(
-        (index) => {
-          if (currentGroups.has(index)) {
-            const timedOutGroup = currentGroups.get(index) as Event[];
-            currentGroups.delete(index);
-            queue.push(timedOutGroup);
-          }
-        },
-        timeWindow,
-        currentGroupIndex
-      ).unref();
-    }
+    currentGroups.forEach(({ events }) => events.push(event));
     if (options.functionMode === "reduce") {
       // In reduce mode, groups are disjoint
     } else {
@@ -107,9 +117,12 @@ export const makeWindowingChannel = (
     return Array.from(currentGroups)
       .sort(([indexA], [indexB]) => indexA - indexB)
       .map(([index, group]) => {
-        if (group.length >= options.windowMaxSize) {
+        if (group.events.length >= options.windowMaxSize) {
+          if (group.timeout !== null) {
+            clearTimeout(group.timeout);
+          }
           currentGroups.delete(index);
-          return queue.push(group);
+          return queue.push(group.events);
         }
         return true;
       })
@@ -123,8 +136,11 @@ export const makeWindowingChannel = (
       Array.from(currentGroups)
         .sort(([indexA], [indexB]) => indexA - indexB)
         .forEach(([index, group]) => {
+          if (group.timeout !== null) {
+            clearTimeout(group.timeout);
+          }
           currentGroups.delete(index);
-          queue.push(group);
+          queue.push(group.events);
         });
       // Then close the queue.
       queue.close();

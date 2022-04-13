@@ -1,7 +1,8 @@
 import { Channel, flatMap, compose } from "./async-queue";
-import { INPUT_DRAIN_TIMEOUT } from "./conf";
+import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
 import { Event } from "./event";
 import { makeSTDINInput, makeHTTPInput } from "./input";
+import { isHealthy } from "./io/jq";
 import { pipelineEvents, stepEvents } from "./metrics";
 import {
   isValidEventName,
@@ -814,5 +815,16 @@ export const runPipeline = async (
   inputEnded
     .then(() => resolveAfter(INPUT_DRAIN_TIMEOUT * 1000))
     .then(() => connectedChannel.close());
+  if (HEALTH_CHECK_INTERVAL > 0) {
+    const interval = setInterval(() => {
+      if (!isHealthy()) {
+        logger.error(
+          "Pipeline isn't healthy; draining queues and shutting down"
+        );
+        connectedChannel.close();
+        clearInterval(interval);
+      }
+    }, HEALTH_CHECK_INTERVAL * 1000);
+  }
   return [operate(), connectedChannel.close.bind(connectedChannel)];
 };

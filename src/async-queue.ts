@@ -189,8 +189,8 @@ export const compose = <A, B, C>(
     let finished1 = false;
     let finished2 = false;
     const eventSlice: [
-      Promise<{ x: IteratorResult<B | C>; yields: boolean }>,
-      Promise<{ x: IteratorResult<B | C>; yields: boolean }>
+      Promise<{ x: IteratorResult<B | C>; yields: boolean }> | null,
+      Promise<{ x: IteratorResult<B | C>; yields: boolean }> | null
     ] = [
       c1.receive.next().then((x) => ({ x, yields: true })),
       c2.receive.next().then((x) => ({ x, yields: false })),
@@ -199,16 +199,19 @@ export const compose = <A, B, C>(
       const {
         x: { done, value },
         yields,
-      } = await Promise.race(eventSlice);
+      } = await Promise.race(
+        eventSlice.filter((p) => p !== null) as Promise<{
+          x: IteratorResult<B | C>;
+          yields: boolean;
+        }>[]
+      );
       if (done) {
         if (yields) {
           finished1 = true;
         } else {
           finished2 = true;
         }
-        eventSlice[yields ? 0 : 1] = new Promise(() => {
-          // Empty function, used for a never-resolving promise.
-        });
+        eventSlice[yields ? 0 : 1] = null;
       } else {
         eventSlice[yields ? 0 : 1] = (yields ? c1 : c2).receive
           .next()

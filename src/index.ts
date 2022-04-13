@@ -38,14 +38,14 @@ if (require.main === module) {
           ? envsubst(rawPipeline)
           : rawPipeline;
         const template = makePipelineTemplate(subbedPipeline);
-        if (!options.test) {
+        if (options.test) {
+          console.log("Pipeline configuration looks OK!");
+        } else {
           const [promise, finish] = await runPipeline(template);
           ["SIGINT", "SIGTERM", "SIGQUIT"].forEach((signal) =>
             process.on(signal, finish)
           );
           await promise;
-        } else {
-          console.log("Pipeline configuration looks OK!");
         }
       } catch (err) {
         console.error(err);

@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  cdp:
+    build:
+      context: ../..
+    image: cdp:dev
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=128"
+    volumes:
+      - .:/app
+    command: ["-e", "/app/pipeline.yaml"]
+    ports:
+      - 8000:8000
+    restart: "no"
+
+  input:
+    build:
+      dockerfile: input-generator.Dockerfile
+    restart: "no"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.39.3
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    ports:
+      - 8080:8080
+    restart: "always"

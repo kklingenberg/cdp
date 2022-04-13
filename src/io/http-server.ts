@@ -57,6 +57,7 @@ export const makeHTTPServer = (
       if (ctx.request.method === "POST" && ctx.request.path === endpoint) {
         logger.info("Received events payload:", ctx.request.length, "bytes");
         await handler(ctx);
+        ctx.body = null;
       } else if (
         ctx.request.method === "GET" &&
         ctx.request.path === HTTP_SERVER_HEALTH_ENDPOINT

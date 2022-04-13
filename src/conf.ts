@@ -34,6 +34,29 @@ export const INPUT_DRAIN_TIMEOUT: number = parseFloat(
 );
 
 /**
+ * The time to wait between each self health check. Set to 0 to
+ * disable self health checks.
+ */
+export const HEALTH_CHECK_INTERVAL: number = parseFloat(
+  process.env.HEALTH_CHECK_INTERVAL ?? "5" // 5 seconds
+);
+
+/**
+ * An URI that will receive an HTTP request with dead events: events
+ * that couldn't be fully processed.
+ */
+export const DEAD_LETTER_TARGET: string | null =
+  process.env.DEAD_LETTER_TARGET ?? null;
+
+/**
+ * A mapping of HTTP headers to use when sending dead events to a
+ * remote service.
+ */
+export const DEAD_LETTER_TARGET_HEADERS: { [key: string]: string } = JSON.parse(
+  process.env.DEAD_LETTER_TARGET_HEADERS ?? "{}"
+);
+
+/**
  * The default port used for listening for HTTP requests.
  */
 export const HTTP_SERVER_DEFAULT_PORT: number = parseInt(

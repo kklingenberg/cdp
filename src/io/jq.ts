@@ -62,7 +62,7 @@ export const closeInstances = (): void => {
  */
 export const isHealthy = (): boolean =>
   Array.from(instances.values()).every(
-    (instance) => instance.exitCode === null
+    (instance) => instance.exitCode === null && instance.signalCode === null
   );
 
 /**

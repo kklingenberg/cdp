@@ -1,4 +1,6 @@
+import { DEAD_LETTER_TARGET, DEAD_LETTER_TARGET_HEADERS } from "./conf";
 import { Event } from "./event";
+import { sendEvents } from "./io/http-client";
 import { makeLogger } from "./utils";
 
 /**
@@ -11,9 +13,15 @@ const logger = makeLogger("dead-letter");
  * processed for whatever reason.
  */
 export const handler = async (events: Event[]): Promise<void> => {
-  // TODO do something with dead-letters.
-  logger.error("Events that didn't reach the end of the pipeline:");
+  logger.error("Events that couldn't reach the end of the pipeline:");
   for (const event of events) {
     console.error(JSON.stringify(event));
+  }
+  if ((DEAD_LETTER_TARGET?.length ?? 0) > 0) {
+    await sendEvents(
+      events,
+      DEAD_LETTER_TARGET as string,
+      DEAD_LETTER_TARGET_HEADERS
+    );
   }
 };
