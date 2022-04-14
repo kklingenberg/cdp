@@ -1,7 +1,7 @@
 import { AsyncQueue } from "./async-queue";
 import * as deadLetter from "./dead-letter";
 import { Event } from "./event";
-import { stepEvents } from "./metrics";
+import { stepEvents, deadEvents as deadEventsMetric } from "./metrics";
 import { Step, StepFactory } from "./step";
 import { makeLogger, resolveAfter } from "./utils";
 
@@ -164,6 +164,7 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
       return events.forEach((event) => {
         if (!busQueue.push([index, event])) {
           deadEvents.push(event);
+          deadEventsMetric.set({ pipeline: pipeline.name }, deadEvents.length);
         }
       });
     };
@@ -193,6 +194,7 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
         .every((s) => s);
       if (!sent) {
         deadEvents.push(event);
+        deadEventsMetric.set({ pipeline: pipeline.name }, deadEvents.length);
       }
       if (nextNodeIndices.length === 0) {
         yield event;

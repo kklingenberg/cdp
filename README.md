@@ -112,7 +112,7 @@ steps:
 ```
 
 Less trivial examples can be found in the [examples
-directory](examples/README.md).
+directory](examples).
 
 ## Usage
 

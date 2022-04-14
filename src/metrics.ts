@@ -22,3 +22,13 @@ export const stepEvents = new client.Counter({
   help: "The count of events flowing in and out of a pipeline step.",
   labelNames: ["pipeline", "step", "flow"] as const,
 });
+
+/**
+ * Tracks the count of dead events accumulated during a pipeline
+ * operation.
+ */
+export const deadEvents = new client.Gauge({
+  name: `${METRICS_PREFIX}dead_events`,
+  help: "The count of dead events in a pipeline.",
+  labelNames: ["pipeline"] as const,
+});

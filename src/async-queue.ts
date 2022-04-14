@@ -186,8 +186,6 @@ export const compose = <A, B, C>(
   c2: Channel<A, B>
 ): Channel<A, C> => {
   async function* composed() {
-    let finished1 = false;
-    let finished2 = false;
     const eventSlice: [
       Promise<{ x: IteratorResult<B | C>; yields: boolean }> | null,
       Promise<{ x: IteratorResult<B | C>; yields: boolean }> | null
@@ -195,7 +193,7 @@ export const compose = <A, B, C>(
       c1.receive.next().then((x) => ({ x, yields: true })),
       c2.receive.next().then((x) => ({ x, yields: false })),
     ];
-    while (!finished1 || !finished2) {
+    while (eventSlice[0] !== null && eventSlice[1] !== null) {
       const {
         x: { done, value },
         yields,
@@ -206,11 +204,6 @@ export const compose = <A, B, C>(
         }>[]
       );
       if (done) {
-        if (yields) {
-          finished1 = true;
-        } else {
-          finished2 = true;
-        }
         eventSlice[yields ? 0 : 1] = null;
       } else {
         eventSlice[yields ? 0 : 1] = (yields ? c1 : c2).receive

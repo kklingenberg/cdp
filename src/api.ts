@@ -3,7 +3,7 @@ import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
 import { Event } from "./event";
 import { makeSTDINInput, makeHTTPInput } from "./input";
 import { isHealthy } from "./io/jq";
-import { pipelineEvents, stepEvents } from "./metrics";
+import { pipelineEvents, stepEvents, deadEvents } from "./metrics";
 import {
   isValidEventName,
   Pattern,
@@ -668,6 +668,7 @@ export const runPipeline = async (
   // Zero pipeline metrics.
   pipelineEvents.inc({ pipeline: template.name, flow: "in" }, 0);
   pipelineEvents.inc({ pipeline: template.name, flow: "out" }, 0);
+  deadEvents.set({ pipeline: template.name }, 0);
   // Create the input channel.
   const signature = await getSignature(template);
   let inputChannel: Channel<never, Event>;
