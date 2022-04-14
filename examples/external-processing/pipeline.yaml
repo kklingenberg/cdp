@@ -1,0 +1,62 @@
+name: "External processing"
+input:
+  stdin:
+    wrap: _
+
+steps:
+
+  numbers:
+    flatmap:
+      keep-when:
+        type: number
+
+  set to x:
+    after:
+      - numbers
+    flatmap:
+      send-receive-jq: ".[] | . * {d: {x: .d}}"
+
+  square root:
+    after:
+      - set to x
+    window:
+      events: 1000
+      seconds: 0.5
+    reduce:
+      send-receive-http:
+        target: http://rooter/calculate
+        jq-expr: map(.d) # This disables ndjson for the request, as
+                         # the vector is sent as a single JSON-encoded
+                         # array of values keyed to x.
+        headers:
+          Content-Type: application/json
+        wrap: square-root
+
+  sine:
+    after:
+      - set to x
+    window:
+      events: 1000
+      seconds: 0.5
+    reduce:
+      send-receive-http:
+        target: http://siner/calculate
+        jq-expr: map(.d)
+        headers:
+          Content-Type: application/json
+        wrap: sine
+
+  merge:
+    after:
+      - square root
+      - sine
+    window:
+      events: 2000
+      seconds: 3
+    flatmap:
+      send-stdout:
+        jq-expr: |-
+          .[0].n as $kind
+          | .[0].d.x as $x
+          | map(select((.d.x == $x) and (.n != $kind))) as $other
+          | if ($other | length) == 0 then empty else .[0].d * $other[0].d end

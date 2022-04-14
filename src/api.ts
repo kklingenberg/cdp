@@ -812,20 +812,36 @@ export const runPipeline = async (
       logger.debug("Event", event.signature, "reached the end of the pipeline");
     }
   };
-  // Schedule the pipeline's close when the input ends by external causes.
-  inputEnded
-    .then(() => resolveAfter(INPUT_DRAIN_TIMEOUT * 1000))
-    .then(() => connectedChannel.close());
+  // Monitor the health of the multi-process system and shut
+  // everything off if any piece is unhealthy.
+  let interval: ReturnType<typeof setInterval> | null = null;
   if (HEALTH_CHECK_INTERVAL > 0) {
-    const interval = setInterval(() => {
+    interval = setInterval(() => {
       if (!isHealthy()) {
         logger.error(
           "Pipeline isn't healthy; draining queues and shutting down"
         );
+        clearInterval(interval as ReturnType<typeof setInterval>);
         connectedChannel.close();
-        clearInterval(interval);
       }
     }, HEALTH_CHECK_INTERVAL * 1000);
   }
-  return [operate(), connectedChannel.close.bind(connectedChannel)];
+  // Schedule the pipeline's close when the input ends by external causes.
+  inputEnded
+    .then(() => resolveAfter(INPUT_DRAIN_TIMEOUT * 1000))
+    .then(() => {
+      if (interval !== null) {
+        clearInterval(interval as ReturnType<typeof setInterval>);
+      }
+      return connectedChannel.close();
+    });
+  return [
+    operate(),
+    () => {
+      if (interval !== null) {
+        clearInterval(interval as ReturnType<typeof setInterval>);
+      }
+      connectedChannel.close();
+    },
+  ];
 };

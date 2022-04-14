@@ -180,6 +180,14 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
   async function* digestEvents() {
     for await (const [sourceNodeIndex, event] of busQueue.iterator()) {
       const nextNodeIndices = edges.get(sourceNodeIndex) ?? [];
+      logger.debug(
+        "Got event",
+        event.signature,
+        "from the bus queue, emitted from node:",
+        sourceNodeIndex,
+        "; next nodes are:",
+        nextNodeIndices
+      );
       // Increase in-flow metrics of next steps.
       nextNodeIndices.forEach((nodeIndex) =>
         stepEvents.inc({

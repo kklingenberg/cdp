@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  cdp:
+    build:
+      context: ../..
+    image: cdp:dev
+    volumes:
+      - .:/app
+    command: ["-e", "/app/pipeline.yaml"]
+    depends_on:
+      - rooter
+      - siner
+
+  rooter:
+    build:
+      dockerfile: external.Dockerfile
+      args:
+        - EXPR=sqrt
+    ports:
+      - 8000:80
+
+  siner:
+    build:
+      dockerfile: external.Dockerfile
+      args:
+        - EXPR=sin
