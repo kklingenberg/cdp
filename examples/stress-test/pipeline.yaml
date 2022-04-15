@@ -1,3 +1,4 @@
+---
 # This pipeline is utterly useless, and was only built as an example
 # for stress-testing. It features several windows (queues) and several
 # parallel processing (using jq). Nothing interesting should be

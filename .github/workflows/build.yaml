@@ -1,0 +1,20 @@
+name: Build docker image and push it to the registry
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Login
+        run: echo "${{ secrets.DOCKER_HUB_PASSWORD }}" | docker login -u plotter --password-stdin
+      - name: Build image
+        run: docker build -t "plotter/cdp:latest"
+                          -t "plotter/cdp:${{ github.ref_name }}"
+                          .
+      - name: Push image
+        run: docker push --all-tags plotter/cdp

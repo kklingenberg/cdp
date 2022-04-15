@@ -23,7 +23,7 @@ is comprised of the following fields:
   name of an event is for the user to decide, although it's useful to
   link it to the notion of _stream_ or _time series_, where it could
   identify a set of events. Names are mandatory to provide and are
-  [restricted to a specific scheme]().
+  [restricted to a specific scheme](src/pattern.ts).
 - **`d`**, which holds the event's contents. The contents may be any
   value, or they could even be missing.
 - **`t`**, which holds the event's _trace_. This is optional to provide
@@ -109,6 +109,7 @@ steps:
   print:
     flatmap:
       send-stdout:
+
 ```
 
 Less trivial examples can be found in the [examples
@@ -116,4 +117,368 @@ directory](examples).
 
 ## Usage
 
-TODO write about this.
+```bash
+docker run --rm plotter/cdp:latest --help
+```
+
+Once you've created a pipeline file (say: `pipeline.yaml`), the
+easiest way to run CDP is with Docker, Podman, or any OCI-compatible
+software:
+
+```bash
+docker run \
+    --rm \
+    -v $(pwd)/pipeline.yaml:/app/pipeline.yaml \
+    plotter/cdp:latest /app/pipeline.yaml
+```
+
+Alternatively you can run CDP using your own NodeJS installation by
+extracting the source code from the container image. For example,
+using Docker:
+
+```bash
+# Extract the source into cdp.js
+export container=$(docker create plotter/cdp:latest)
+docker cp ${container}:/src/index.js cdp.js
+docker rm ${container}
+unset container
+# Use it
+node cdp.js --help
+```
+
+The structure of a pipeline file is described below. The source code
+of the structure validation may also be followed to verify the
+implementation of any given field or option: [here](src/api.ts).
+
+### Input forms
+
+Input forms follow the schema:
+
+**`input`** required **object**, a structure containing a single input
+form.
+
+**`input.stdin`** **object** or **null**, the input form that makes a
+pipeline read source data from standard input.
+
+**`input.stdin.wrap`** optional **string**, an event name given to all
+source data received, which will be wrapped.
+
+**`input.http`** **object** or **string**, the input form that makes a
+pipeline receive source data from HTTP POST requests. If given as a
+string, it indicates the path that will receive requests with source data.
+
+**`input.http.endpoint`** required **string**, indicates the path that
+will receive requests with source data.
+
+**`input.http.port`** optional **number** or **string**, indicates the
+numeric TCP port to listen on. The default value is determined by the
+`HTTP_SERVER_DEFAULT_PORT` variable, and it has a default value of
+`8000`.
+
+**`input.http.wrap`** optional **string**, an event name given to all
+source data received, which will be wrapped.
+
+#### Wrapping
+
+Both input forms and some step functions offer the option of wrapping
+the captured data with the `wrap` option. It indicates whether the
+data captured is considered to be the raw (JSON-encoded) data and
+should be wrapped in events with the specified name. If not given,
+captured data must be fully-encoded events.
+
+For example, if receiving data such as `{"this": "is my data"}` is to
+be supported, a wrapper would need to be used since it doesn't comply
+with the [event format](#what-cdp-understands-by-data).
+
+### Step dependencies
+
+Step dependencies are speficied as a list of step names that provide
+events for the one including the dependencies.
+
+**`steps.<name>.after`** optional **list of string**, names of steps
+that will be run before this step, and which will feed their output
+events to this step. The `$input` name can be used in this list to
+refer to the pipeline's input.
+
+Not specifying any dependency or leaving it as an empty list is
+equivalent to the singleton list `["$input"]`.
+
+Any two steps that aren't in a direct or transitive dependency
+relationship _can_ process events in parallel.
+
+In a pipeline, steps form a
+[DAG](https://en.wikipedia.org/wiki/Directed_acyclic_graph): no cycles
+are allowed.
+
+### Pattern matching
+
+Steps can be set to filter events before processing by using
+_patterns_. Filtering can also be set to drop events entirely for any
+following step, or to simply skip the current step's processing but
+fast-forward to the following steps.
+
+**`steps.<name>.match/drop`** optional **pattern**, configures the
+step to drop events with names not matching the pattern
+specified. Events dropped this way won't be received by steps that
+follow the one containing the pattern.
+
+**`steps.<name>.match/pass`** optional **pattern**, configures the
+step to skip events with names not matching the pattern
+specified. Events skipped this way will still be received by steps
+that follow the one containing the pattern.
+
+Any pipeline step can specify at most one of `match/drop` or
+`match/pass`.
+
+A **pattern** is a structure defined inductively:
+1. A **string** is a pattern that matches event names equal to it,
+   considering that `*` can be used in a pattern as a wildcard for any
+   word in an event name, and `#` can be used in a pattern as a
+   wildcard for any sequence of words in an event name (including a
+   zero-length sequence). Event names and string patterns can be
+   understood as the same as [RabbitMQ's binding and routing
+   keys](https://www.rabbitmq.com/tutorials/tutorial-five-python.html).
+1. An **object** with an `or` key mapped to a **list of pattern** is a
+   pattern, that matches if any of the patterns in the list mapped to
+   `or` matches.
+1. An **object** with an `and` key mapped to a **list of pattern** is
+   a pattern, that matches if all of the patterns in the list mapped
+   to `and` matches.
+1. An **object** with a `not` key mapped to a **pattern** is a
+   pattern, that matches if the pattern mapped to `not` doesn't match.
+
+A few examples:
+
+```yaml
+steps:
+  foo:
+    # A string pattern
+    match/pass: "foo.#.bar.*"
+    # ...
+
+  bar:
+    # A composite pattern
+    match/drop:
+      not:
+        and:
+          - "foo.bar.*.*"
+          - "#.baz"
+          - or:
+            - "#.hey.*"
+            - "#.hi.*"
+    # ...
+
+```
+
+### Vector definitions
+
+All steps in CDP operate over vectors (i.e. groups, or _windows_) of
+events. If not configured, a step will operate over singleton
+vectors. Using the `window` field, however, the pipeline author may
+configure a step to process more than one event at a time.
+
+**`steps.<name>.window`** optional **object**, contains the
+specification for assembling event vectors for processing.
+
+**`steps.<name>.window.events`** required **number** or **string**, a
+maximum quantity of events to accumulate in each vector before sending
+it to be processed.
+
+**`steps.<name>.window.seconds`** required **number** or **string**, a
+maximum number of seconds to wait after receiving the first event of
+the vector, for the vector to "fill up". The vector will be sent for
+processing after either reaching the cardinality specified in
+`window.events` or this time interval.
+
+When using a non-default configuration for vector construction, a
+pipeline's author should consider the "main event of the vector" to be
+the first one, especially when using the `flatmap` processing mode
+(explained further below).
+
+An example:
+
+```yaml
+steps:
+  foo:
+    # Wait for 100 events or 1.5 seconds, whatever happens first.
+    window:
+      events: 100
+      seconds: 1.5
+    # ...
+
+```
+
+Vector construction is mainly a tool to control flow rate, but can
+also be used to compute moving aggregates over your data.
+
+### Processing modes
+
+A pipeline step can be set to process event vectors in one of two
+ways: by operating on disjoint vectors, or by _sliding_ through
+superimposed vectors. These modes of processing are called **reduce**
+and **flatmap** respectively.
+
+**`steps.<name>.reduce`** **object**, indicates the processing
+function to use in reduce mode.
+
+**`steps.<name>.flatmap`** **object**, indicates the processing
+function to use in flatmap mode.
+
+One of the modes must be used.
+
+The following example illustrates the difference between the two
+modes. Given the partial pipeline file:
+
+```yaml
+steps:
+  foo:
+    window:
+      events: 3
+      seconds: 1
+    reduce:
+      send-stdout:
+        jq-expr: .
+
+  bar:
+    window:
+      events: 3
+      seconds: 1
+    flatmap:
+      send-stdout:
+        jq-expr: .
+
+```
+
+The only difference between `foo` and `bar` is the operation mode. If
+receiving as input events A, B, C, D, and E, the step `foo` would
+print to stdout two vectors: [A, B, C] and [D, E]. The step `bar`
+would print five vectors: [A, B, C], [B, C, D], [C, D, E], [D, E] and
+finally [E].
+
+In general, the use of `flatmap` implies much more processing load.
+
+### Processing functions
+
+The step functions themselves (keyed under `reduce` or `flatmap`) come
+from a fixed list of options:
+
+#### `rename`
+
+**`steps.<name>.(reduce|flatmap).rename`** **object**, a function that
+renames events it receives.
+
+**`steps.<name>.(reduce|flatmap).rename.replace`** **string**, the
+name that will be assigned to events going through this step.
+
+**`steps.<name>.(reduce|flatmap).rename.append`** optional **string**,
+a suffix to add to event names going though this step.
+
+**`steps.<name>.(reduce|flatmap).rename.prepend`** optional
+**string**, a prefix to add to event names going through this step.
+
+The `rename` function can only be given the `replace` option or a
+combination of the `append` and `prepend` options.
+
+#### `deduplicate`
+
+**`steps.<name>.(reduce|flatmap).deduplicate`** **object** or
+**null**, a function that removes duplicate events from vectors.
+
+#### `keep`
+
+**`steps.<name>.(reduce|flatmap).keep`** **number** or **string**, a
+function that selects the first few events from an event vector, the
+number of events kept being the specified value.
+
+#### `keep-when`
+
+**`steps.<name>.(reduce|flatmap).keep-when`** **object**, a function that
+selects events from an event vector, according to whether their data
+complies with the schema given. The schema should be a valid [JSON
+Schema object](https://json-schema.org/specification.html).
+
+#### `send-stdout`
+
+**`steps.<name>.(reduce|flatmap).send-stdout`** **object** or
+**null**, a function that always sends forward the events in the
+vectors it receives, unmodified. It also prints the events to STDOUT.
+
+**`steps.<name>.(reduce|flatmap).send-stdout.jq-expr`** optional
+**string**, specifies a `jq` filter to apply before sending events to
+STDOUT.
+
+#### `send-http`
+
+**`steps.<name>.(reduce|flatmap).send-http`** **string** or
+**object**, a function that always sends forward the events in the
+vectors it receives, unmodified. It also sends those vectors to the
+specified HTTP target, using a POST request. If given a string, the
+value is taken to be target URI to use for the event-sending request.
+
+**`steps.<name>.(reduce|flatmap).send-http.target`** required
+**string**, the target URI to use for the event-sending request.
+
+**`steps.<name>.(reduce|flatmap).send-http.jq-expr`** optional
+**string**, an optional `jq` filter to apply to events before creating
+the request. If this option is used, each distinct value produced by
+the filter is used for a separate request. If this option is not used,
+each event vector produces a request, and the content type header of
+the request is forced to `application/x-ndjson`.
+
+**`steps.<name>.(reduce|flatmap).send-http.headers`** optional
+**object**, additional HTTP headers to use for the request. If not
+using the `jq-expr` option, the request content type cannot be
+altered.
+
+#### `send-receive-jq`
+
+**`steps.<name>.(reduce|flatmap).send-receive-jq`** **string** or
+**object**, a function that sends the event vector to `jq` for
+processing, and parses its output and produces new events. If given a
+string, it's used as the `jq` filter.
+
+**`steps.<name>.(reduce|flatmap).send-receive-jq.jq-expr`** required
+**string**, the `jq` filter to use.
+
+**`steps.<name>.(reduce|flatmap).send-receive-jq.wrap`** optional
+**string**, an event name given to all data received from `jq`, which
+will be wrapped. Se [wrapping](#wrapping).
+
+#### `send-receive-http`
+
+**`steps.<name>.(reduce|flatmap).send-receive-http`** **string** or
+**object**, a function that sends event vectors to the specified HTTP
+target, using a POST request. If given a string, the value is taken to
+be target URI to use for the event-sending request. The response
+received is parsed to be the transformed events, which will continue
+the next steps in the pipeline.
+
+**`steps.<name>.(reduce|flatmap).send-receive-http.target`** required
+**string**, the target URI to use for the event-sending request.
+
+**`steps.<name>.(reduce|flatmap).send-receive-http.jq-expr`** optional
+**string**, an optional `jq` filter to apply to events before creating
+the request. If this option is used, each distinct value produced by
+the filter is used for a separate request. If this option is not used,
+each event vector produces a request, and the content type header of
+the request is forced to `application/x-ndjson`.
+
+**`steps.<name>.(reduce|flatmap).send-receive-http.headers`** optional
+**object**, additional HTTP headers to use for the request. If not
+using the `jq-expr` option, the request content type cannot be
+altered.
+
+#### About `jq` expressions
+
+Several step processing functions have the option of using `jq` as a
+pre-processing step (typically under a `jq-expr` option). This can be
+used to change the format of events ahead of time, and can also be
+used to communicate in plain text formats (i.e. non-JSON). To do that,
+simply return string values from your `jq` filters.
+
+### Additional configuration
+
+A CDP program can be further configured with certain environment
+variables. These parameters can't be placed inside the pipeline
+file. The whole list of environment variables read and used can be
+found in the [source](src/conf.ts).

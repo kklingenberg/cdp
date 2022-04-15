@@ -1,3 +1,4 @@
+---
 name: "Basic jq transformations"
 input:
   stdin:
@@ -6,14 +7,11 @@ steps:
   # forwarding (with and without jq).
 
   duplicate-and-wrap:
-    window:
-      events: 100
-      seconds: 1
-    reduce:
+    flatmap:
       send-receive-jq: |-
         map([. * {
           n: (.n + ".given"),
-          d: {value: .d}
+          d: .d
         }] + (if .d == null then [] else [. * {
           n: (.n + ".healthy"),
           d: .d

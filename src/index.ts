@@ -24,7 +24,7 @@ if (require.main === module) {
       "-t, --test",
       "don't start a program, but instead simply check PIPELINEFILE for correctness"
     )
-    .argument("<pipelinefile>")
+    .argument("<PIPELINEFILE>")
     .addHelpText(
       "after",
       "\nConfiguration of cdp programs is further achieved through " +

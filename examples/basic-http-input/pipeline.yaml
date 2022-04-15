@@ -1,3 +1,4 @@
+---
 name: "Basic HTTP input"
 input:
   http:

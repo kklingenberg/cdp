@@ -80,8 +80,7 @@ export const HTTP_SERVER_LISTEN_BACKLOG: number = parseInt(
 );
 
 /**
- * The endpoint which will expose the application's health status (an
- * empty, successful response).
+ * The endpoint which will expose the application's health status.
  */
 export const HTTP_SERVER_HEALTH_ENDPOINT: string =
   process.env.HTTP_SERVER_HEALTH_ENDPOINT ?? "/healthz";
