@@ -1,8 +1,14 @@
 import { Channel, AsyncQueue } from "./async-queue";
 import { HTTP_SERVER_DEFAULT_PORT, POLL_INPUT_DEFAULT_INTERVAL } from "./conf";
-import { Event, makeNewEventParser, parseChannel, makeWrapper } from "./event";
+import {
+  Event,
+  makeNewEventParser,
+  parseChannel,
+  WrapDirective,
+  chooseParser,
+  makeWrapper,
+} from "./event";
 import { axiosInstance } from "./io/axios";
-import { parse } from "./io/read-stream";
 import { makeHTTPServer } from "./io/http-server";
 import { makeLogger } from "./utils";
 
@@ -27,8 +33,11 @@ const logger = makeLogger("input");
 export const makeSTDINInput = (
   pipelineName: string,
   pipelineSignature: string,
-  options: { wrap?: string } | null
+  options: { wrap?: WrapDirective } | null
 ): [Channel<never, Event>, Promise<void>] => {
+  const parse = chooseParser(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
   const wrapper = makeWrapper(options?.wrap);
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const rawReceive = parse(process.stdin);
@@ -78,8 +87,13 @@ export const makeSTDINInput = (
 export const makeHTTPInput = (
   pipelineName: string,
   pipelineSignature: string,
-  options: string | { endpoint: string; port?: number | string; wrap?: string }
+  options:
+    | string
+    | { endpoint: string; port?: number | string; wrap?: WrapDirective }
 ): [Channel<never, Event>, Promise<void>] => {
+  const parse = chooseParser(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
   const wrapper = makeWrapper(
     (typeof options === "string" ? {} : options)?.wrap
   );
@@ -140,9 +154,12 @@ export const makePollInput = (
         target: string;
         seconds?: number | string;
         headers?: { [key: string]: string | number | boolean };
-        wrap?: string;
+        wrap?: WrapDirective;
       }
 ): [Channel<never, Event>, Promise<void>] => {
+  const parse = chooseParser(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
   const wrapper = makeWrapper(
     (typeof options === "string" ? {} : options)?.wrap
   );
@@ -174,7 +191,7 @@ export const makePollInput = (
       : typeof options.seconds === "string"
       ? parseFloat(options.seconds)
       : options.seconds ?? POLL_INPUT_DEFAULT_INTERVAL;
-  const interval = setInterval(fetchOne, lapse);
+  const interval = setInterval(fetchOne, lapse * 1000);
   // Wrap the queue's channel to make it look like an input channel.
   let notifyDrained: () => void;
   const drained: Promise<void> = new Promise((resolve) => {

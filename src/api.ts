@@ -1,6 +1,11 @@
 import { Channel, flatMap, compose } from "./async-queue";
 import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
-import { Event } from "./event";
+import {
+  Event,
+  WrapDirective,
+  wrapDirectiveSchema,
+  validateWrap,
+} from "./event";
 import { makeSTDINInput, makeHTTPInput, makePollInput } from "./input";
 import { isHealthy } from "./io/jq";
 import { pipelineEvents, stepEvents, deadEvents } from "./metrics";
@@ -31,7 +36,7 @@ const logger = makeLogger("api");
  * The `stdin` input form ingests events from STDIN.
  */
 interface STDINInputTemplate {
-  stdin: { wrap?: string } | null;
+  stdin: { wrap?: WrapDirective } | null;
 }
 const stdinInputTemplateSchema = {
   type: "object",
@@ -40,7 +45,7 @@ const stdinInputTemplateSchema = {
       anyOf: [
         {
           type: "object",
-          properties: { wrap: { type: "string", minLength: 1 } },
+          properties: { wrap: wrapDirectiveSchema },
           additionalProperties: false,
           required: [],
         },
@@ -61,7 +66,7 @@ interface HTTPInputTemplate {
     | {
         endpoint: string;
         port?: number | string;
-        wrap?: string;
+        wrap?: WrapDirective;
       };
 }
 const httpInputTemplateSchema = {
@@ -80,10 +85,7 @@ const httpInputTemplateSchema = {
                 { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
               ],
             },
-            wrap: {
-              type: "string",
-              minLength: 1,
-            },
+            wrap: wrapDirectiveSchema,
           },
           additionalProperties: false,
           required: ["endpoint"],
@@ -105,7 +107,7 @@ interface PollInputTemplate {
         target: string;
         seconds?: number | string;
         headers?: { [key: string]: string | number | boolean };
-        wrap?: string;
+        wrap?: WrapDirective;
       };
 }
 const pollInputTemplateSchema = {
@@ -135,10 +137,7 @@ const pollInputTemplateSchema = {
                 ],
               },
             },
-            wrap: {
-              type: "string",
-              minLength: 1,
-            },
+            wrap: wrapDirectiveSchema,
           },
           additionalProperties: false,
           required: ["target"],
@@ -335,7 +334,7 @@ interface SendReceiveJqFunctionTemplate {
     | string
     | {
         ["jq-expr"]: string;
-        wrap?: string;
+        wrap?: WrapDirective;
       };
 }
 const sendReceiveJqFunctionTemplateSchema = {
@@ -348,7 +347,7 @@ const sendReceiveJqFunctionTemplateSchema = {
           type: "object",
           properties: {
             "jq-expr": { type: "string", minLength: 1 },
-            wrap: { type: "string", minLength: 1 },
+            wrap: wrapDirectiveSchema,
           },
           additionalProperties: false,
           required: ["jq-expr"],
@@ -373,7 +372,7 @@ interface SendReceiveHTTPFunctionTemplate {
         target: string;
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
-        wrap?: string;
+        wrap?: WrapDirective;
       };
 }
 const sendReceiveHTTPFunctionTemplateSchema = {
@@ -398,7 +397,7 @@ const sendReceiveHTTPFunctionTemplateSchema = {
                 ],
               },
             },
-            wrap: { type: "string", minLength: 1 },
+            wrap: wrapDirectiveSchema,
           },
           additionalProperties: false,
           required: ["target"],
@@ -547,16 +546,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   const { input } = thing as { input: object };
   if ("poll" in input) {
     const { poll } = input as { poll: object };
-    // 1.1 Check that the wrap string is a valid event name, if given.
-    if (typeof poll === "object" && "wrap" in poll) {
-      const { wrap } = poll as { wrap: string };
-      if (!isValidEventName(wrap)) {
-        throw new Error(
-          "the input's wrap option is invalid: it must be a proper event name"
-        );
-      }
-    }
-    // 1.2 Check that the poll interval is valid, if given as a string.
+    // 1.1 Check that the poll interval is valid, if given as a string.
     if (typeof poll === "object" && "seconds" in poll) {
       const { seconds } = poll as { seconds?: number | string };
       if (typeof seconds === "string") {
@@ -567,6 +557,11 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
           );
         }
       }
+    }
+    // 1.2 Check that the wrap directive is valid, if given.
+    if (typeof poll === "object" && "wrap" in poll) {
+      const { wrap } = poll as { wrap: unknown };
+      validateWrap(wrap, "the input's wrap option");
     }
   }
   if ("http" in input) {
@@ -583,26 +578,18 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
         }
       }
     }
-    // 1.4 Check that the wrap string is a valid event name, if given.
+    // 1.4 Check that the wrap directive is valid, if given.
     if (typeof http === "object" && "wrap" in http) {
-      const { wrap } = http as { wrap: string };
-      if (!isValidEventName(wrap)) {
-        throw new Error(
-          "the input's wrap option is invalid: it must be a proper event name"
-        );
-      }
+      const { wrap } = http as { wrap: unknown };
+      validateWrap(wrap, "the input's wrap option");
     }
   }
   if ("stdin" in input) {
     const { stdin } = input as { stdin: object | null };
-    // 1.5 Check that the wrap string is a valid event name, if given.
+    // 1.5 Check that the wrap directive is valid, if given.
     if (stdin !== null && "wrap" in stdin) {
-      const { wrap } = stdin as { wrap: string };
-      if (!isValidEventName(wrap)) {
-        throw new Error(
-          "the input's wrap option is invalid: it must be a proper event name"
-        );
-      }
+      const { wrap } = stdin as { wrap: unknown };
+      validateWrap(wrap, "the input's wrap option");
     }
   }
   // 2. Check each step.
@@ -702,23 +689,21 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     // the wrap option is valid, if given.
     if ("send-receive-jq" in fn) {
       if (typeof fn["send-receive-jq"] !== "string") {
-        if (typeof fn["send-receive-jq"].wrap === "string") {
-          if (!isValidEventName(fn["send-receive-jq"].wrap)) {
-            throw new Error(
-              `step '${name}' uses an invalid wrap option: it must be a proper event name`
-            );
-          }
+        if (typeof fn["send-receive-jq"].wrap !== "undefined") {
+          validateWrap(
+            fn["send-receive-jq"].wrap,
+            `step '${name}' wrap option`
+          );
         }
       }
     }
     if ("send-receive-http" in fn) {
       if (typeof fn["send-receive-http"] !== "string") {
-        if (typeof fn["send-receive-http"].wrap === "string") {
-          if (!isValidEventName(fn["send-receive-http"].wrap)) {
-            throw new Error(
-              `step '${name}' uses an invalid wrap option: it must be a proper event name`
-            );
-          }
+        if (typeof fn["send-receive-http"].wrap !== "undefined") {
+          validateWrap(
+            fn["send-receive-jq"].wrap,
+            `step '${name}' wrap option`
+          );
         }
       }
     }

@@ -112,7 +112,7 @@ export const makeWindowingChannel = (
       // In reduce mode, groups are disjoint
     } else {
       // In flatmap mode, groups overlap
-      currentGroupIndex++;
+      currentGroupIndex = (currentGroupIndex + 1) % Number.MAX_SAFE_INTEGER;
     }
     return Array.from(currentGroups)
       .sort(([indexA], [indexB]) => indexA - indexB)

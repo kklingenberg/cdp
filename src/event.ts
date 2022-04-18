@@ -1,6 +1,8 @@
+import { Readable } from "stream";
 import { Channel, flatMap } from "./async-queue";
 import { ajv, getSignature, makeLogger } from "./utils";
 import { isValidEventName } from "./pattern";
+import { parseLines, parseJson } from "./io/read-stream";
 
 /**
  * A logger instance namespaced to this module.
@@ -292,6 +294,81 @@ export const parseChannel = <T>(
   );
 
 /**
+ * A wrapper directive is an instruction to wrap incoming data into an
+ * event structure.
+ */
+export type WrapDirective = string | { name: string; raw?: boolean };
+
+/**
+ * Provide the above type definition as a JSON schema.
+ */
+export const wrapDirectiveSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        name: { type: "string", minLength: 1 },
+        raw: { type: "boolean" },
+      },
+      additionalProperties: false,
+      required: ["name"],
+    },
+  ],
+};
+
+/**
+ * Validate a wrap directive using the schema.
+ */
+const validateWrapDirective = ajv.compile(wrapDirectiveSchema);
+
+/**
+ * Validate the correctness of a wrap directive.
+ *
+ * @param wrap The wrap directive that needs validation.
+ * @param errorPrefix A prefix used for the error message, emitted in
+ * case the wrap directive is not valid.
+ */
+export const validateWrap = (wrap: unknown, errorPrefix = "wrap"): void => {
+  if (!validateWrapDirective(wrap)) {
+    throw new Error(
+      `${errorPrefix} is not valid: ` +
+        validateWrapDirective.errors
+          ?.map((error) => error.message)
+          .join("; ") ?? "invalid wrap directive"
+    );
+  }
+  if (typeof wrap === "string" && !isValidEventName(wrap)) {
+    throw new Error(
+      `${errorPrefix} is not valid: the given event name is not valid`
+    );
+  }
+  if (typeof wrap === "object") {
+    const { name } = wrap as { name: string };
+    if (!isValidEventName(name)) {
+      throw new Error(
+        `${errorPrefix} is not valid: the given event name is not valid`
+      );
+    }
+  }
+};
+
+/**
+ * Choose a stream parser based on the wrapping directive.
+ *
+ * @param wrap The wrapping directive. May be absent.
+ * @return A procedure that parses a stream.
+ */
+export const chooseParser = (
+  wrap?: WrapDirective
+): ((stream: Readable, limit?: number) => AsyncGenerator<unknown>) =>
+  typeof wrap === "string"
+    ? parseJson
+    : typeof wrap !== "undefined" && wrap.raw
+    ? parseLines
+    : parseJson;
+
+/**
  * Make en event wrapper: a function that takes any value and envelops
  * it into a serialized event.
  *
@@ -299,7 +376,11 @@ export const parseChannel = <T>(
  * given or undefined, the wrapper does nothing to values.
  * @returns A function that wraps (or not) raw data.
  */
-export const makeWrapper = (n?: string) =>
+export const makeWrapper = (
+  n?: WrapDirective
+): ((d: unknown) => SerializedEvent) =>
   typeof n === "string"
     ? (d: unknown): SerializedEvent => ({ n, d })
+    : typeof n !== "undefined"
+    ? makeWrapper(n.name)
     : (d: unknown): SerializedEvent => d as SerializedEvent;

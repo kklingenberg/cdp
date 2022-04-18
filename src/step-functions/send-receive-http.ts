@@ -1,5 +1,5 @@
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
-import { Event } from "../event";
+import { Event, WrapDirective } from "../event";
 import { sendReceiveEvents, sendReceiveThing } from "../io/http-client";
 import { makeChannel } from "../io/jq";
 
@@ -24,7 +24,7 @@ export const make = async (
         target: string;
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
-        wrap?: string;
+        wrap?: WrapDirective;
       }
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
