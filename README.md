@@ -157,11 +157,15 @@ Input forms follow the schema:
 **`input`** required **object**, a structure containing a single input
 form.
 
+#### `stdin`
+
 **`input.stdin`** **object** or **null**, the input form that makes a
 pipeline read source data from standard input.
 
 **`input.stdin.wrap`** optional **string**, an event name given to all
 source data received, which will be wrapped.
+
+#### `http`
 
 **`input.http`** **object** or **string**, the input form that makes a
 pipeline receive source data from HTTP POST requests. If given as a
@@ -178,9 +182,30 @@ numeric TCP port to listen on. The default value is determined by the
 **`input.http.wrap`** optional **string**, an event name given to all
 source data received, which will be wrapped.
 
+#### `poll`
+
+**`input.poll`** **object** or **string**, the input form that makes a
+pipeline actively fetch data periodically from a remote source using
+HTTP requests.. If given as a string, it indicates the URI of the
+remote event source.
+
+**`input.poll.target`** required **string**, the target URI to use for
+the event-fetching request.
+
+**`input.poll.seconds`** optional **number** or **string**, the time
+interval between two consecutive fetch requests. If omitted it will
+default to the value of the `POLL_INPUT_DEFAULT_INTERVAL` environment
+variable, or `5` if the variable is not set.
+
+**`input.poll.headers`** optional **object**, HTTP headers to use for
+each request.
+
+**`input.poll.wrap`** optional **string**, an event name given to all
+source data received, which will be wrapped.
+
 #### Wrapping
 
-Both input forms and some step functions offer the option of wrapping
+All input forms and some step functions offer the option of wrapping
 the captured data with the `wrap` option. It indicates whether the
 data captured is considered to be the raw (JSON-encoded) data and
 should be wrapped in events with the specified name. If not given,
@@ -442,7 +467,7 @@ string, it's used as the `jq` filter.
 
 **`steps.<name>.(reduce|flatmap).send-receive-jq.wrap`** optional
 **string**, an event name given to all data received from `jq`, which
-will be wrapped. Se [wrapping](#wrapping).
+will be wrapped. See [wrapping](#wrapping).
 
 #### `send-receive-http`
 
@@ -468,13 +493,18 @@ the request is forced to `application/x-ndjson`.
 using the `jq-expr` option, the request content type cannot be
 altered.
 
+**`steps.<name>.(reduce|flatmap).send-receive-http.wrap`** optional
+**string**, an event name given to all data received from the
+response, which will be wrapped. See [wrapping](#wrapping).
+
 #### About `jq` expressions
 
-Several step processing functions have the option of using `jq` as a
-pre-processing step (typically under a `jq-expr` option). This can be
-used to change the format of events ahead of time, and can also be
-used to communicate in plain text formats (i.e. non-JSON). To do that,
-simply return string values from your `jq` filters.
+Several step processing functions have the option of using
+[`jq`](https://stedolan.github.io/jq/) as a pre-processing step
+(typically under a `jq-expr` option). This can be used to change the
+format of events ahead of time, and can also be used to communicate in
+plain text formats (i.e. non-JSON). To do that, simply return string
+values from your `jq` filters.
 
 ### Additional configuration
 

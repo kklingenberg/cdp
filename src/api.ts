@@ -1,7 +1,7 @@
 import { Channel, flatMap, compose } from "./async-queue";
 import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
 import { Event } from "./event";
-import { makeSTDINInput, makeHTTPInput } from "./input";
+import { makeSTDINInput, makeHTTPInput, makePollInput } from "./input";
 import { isHealthy } from "./io/jq";
 import { pipelineEvents, stepEvents, deadEvents } from "./metrics";
 import {
@@ -53,7 +53,7 @@ const stdinInputTemplateSchema = {
 };
 
 /**
- * The `http` input form ingests events from an HTTP endpoint.
+ * The `http` input form ingests events at an HTTP endpoint.
  */
 interface HTTPInputTemplate {
   http:
@@ -93,6 +93,61 @@ const httpInputTemplateSchema = {
   },
   additionalProperties: false,
   required: ["http"],
+};
+
+/**
+ * The `poll` input form pulls events by executing HTTP GET requests.
+ */
+interface PollInputTemplate {
+  poll:
+    | string
+    | {
+        target: string;
+        seconds?: number | string;
+        headers?: { [key: string]: string | number | boolean };
+        wrap?: string;
+      };
+}
+const pollInputTemplateSchema = {
+  type: "object",
+  properties: {
+    poll: {
+      anyOf: [
+        { type: "string", minLength: 1 },
+        {
+          type: "object",
+          properties: {
+            target: { type: "string", minLength: 1 },
+            seconds: {
+              anyOf: [
+                { type: "number", exclusiveMinimum: 0 },
+                { type: "string", pattern: "^[0-9]+\\.?[0-9]*$" },
+              ],
+            },
+            headers: {
+              type: "object",
+              properties: {},
+              additionalProperties: {
+                anyOf: [
+                  { type: "string" },
+                  { type: "number" },
+                  { type: "boolean" },
+                ],
+              },
+            },
+            wrap: {
+              type: "string",
+              minLength: 1,
+            },
+          },
+          additionalProperties: false,
+          required: ["target"],
+        },
+      ],
+    },
+  },
+  additionalProperties: false,
+  required: ["poll"],
 };
 
 /**
@@ -361,7 +416,7 @@ const sendReceiveHTTPFunctionTemplateSchema = {
  */
 interface PipelineTemplate {
   name: string;
-  input: STDINInputTemplate | HTTPInputTemplate;
+  input: STDINInputTemplate | HTTPInputTemplate | PollInputTemplate;
   steps?: {
     [key: string]: {
       after?: string[];
@@ -396,7 +451,13 @@ const pipelineTemplateSchema = {
   type: "object",
   properties: {
     name: { type: "string", minLength: 1 },
-    input: { anyOf: [stdinInputTemplateSchema, httpInputTemplateSchema] },
+    input: {
+      anyOf: [
+        stdinInputTemplateSchema,
+        httpInputTemplateSchema,
+        pollInputTemplateSchema,
+      ],
+    },
     steps: {
       type: "object",
       properties: {},
@@ -484,9 +545,33 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   // restriction.
   // 1. Check the input forms.
   const { input } = thing as { input: object };
+  if ("poll" in input) {
+    const { poll } = input as { poll: object };
+    // 1.1 Check that the wrap string is a valid event name, if given.
+    if (typeof poll === "object" && "wrap" in poll) {
+      const { wrap } = poll as { wrap: string };
+      if (!isValidEventName(wrap)) {
+        throw new Error(
+          "the input's wrap option is invalid: it must be a proper event name"
+        );
+      }
+    }
+    // 1.2 Check that the poll interval is valid, if given as a string.
+    if (typeof poll === "object" && "seconds" in poll) {
+      const { seconds } = poll as { seconds?: number | string };
+      if (typeof seconds === "string") {
+        const numericSeconds = parseFloat(seconds);
+        if (numericSeconds <= 0) {
+          throw new Error(
+            `the input has an invalid value for poll.seconds (must be > 0)`
+          );
+        }
+      }
+    }
+  }
   if ("http" in input) {
     const { http } = input as { http: object };
-    // 1.1 Check that the input port is valid, if given as a string.
+    // 1.3 Check that the input port is valid, if given as a string.
     if (typeof http === "object" && "port" in http) {
       const { port } = http as { port: unknown };
       if (typeof port === "string") {
@@ -498,7 +583,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
         }
       }
     }
-    // 1.2 Check that the wrap string is a valid event name, if given.
+    // 1.4 Check that the wrap string is a valid event name, if given.
     if (typeof http === "object" && "wrap" in http) {
       const { wrap } = http as { wrap: string };
       if (!isValidEventName(wrap)) {
@@ -510,7 +595,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   }
   if ("stdin" in input) {
     const { stdin } = input as { stdin: object | null };
-    // 1.3 Check that the wrap string is a valid event name, if given.
+    // 1.5 Check that the wrap string is a valid event name, if given.
     if (stdin !== null && "wrap" in stdin) {
       const { wrap } = stdin as { wrap: string };
       if (!isValidEventName(wrap)) {
@@ -675,6 +760,13 @@ export const runPipeline = async (
   let inputEnded: Promise<void>;
   const inputKey = Object.keys(template.input)[0];
   switch (inputKey) {
+    case "poll":
+      [inputChannel, inputEnded] = makePollInput(
+        template.name,
+        signature,
+        (template.input as PollInputTemplate).poll
+      );
+      break;
     case "http":
       [inputChannel, inputEnded] = makeHTTPInput(
         template.name,
