@@ -1,4 +1,5 @@
 import client from "prom-client";
+import { activeQueues } from "./async-queue";
 import { METRICS_PREFIX } from "./conf";
 
 // Collect metrics provided by the client library.
@@ -11,7 +12,7 @@ client.collectDefaultMetrics();
 export const pipelineEvents = new client.Counter({
   name: `${METRICS_PREFIX}pipeline_events_total`,
   help: "The count of events flowing in and out of a pipeline.",
-  labelNames: ["pipeline", "flow"] as const,
+  labelNames: ["flow"] as const,
 });
 
 /**
@@ -20,7 +21,23 @@ export const pipelineEvents = new client.Counter({
 export const stepEvents = new client.Counter({
   name: `${METRICS_PREFIX}step_events_total`,
   help: "The count of events flowing in and out of a pipeline step.",
-  labelNames: ["pipeline", "step", "flow"] as const,
+  labelNames: ["step", "flow"] as const,
+});
+
+/**
+ * Tracks the count of queued events in any queue used for a pipeline
+ * operation.
+ */
+export const queuedEvents = new client.Gauge({
+  name: `${METRICS_PREFIX}queued_events`,
+  help: "The count of queued events anywhere in a pipeline.",
+  collect() {
+    this.set(
+      Array.from(activeQueues)
+        .map((queue) => queue.data.length)
+        .reduce((a, b) => a + b, 0)
+    );
+  },
 });
 
 /**
@@ -30,5 +47,4 @@ export const stepEvents = new client.Counter({
 export const deadEvents = new client.Gauge({
   name: `${METRICS_PREFIX}dead_events`,
   help: "The count of dead events in a pipeline.",
-  labelNames: ["pipeline"] as const,
 });

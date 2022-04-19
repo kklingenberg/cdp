@@ -154,7 +154,6 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
       // Increase out-flow metrics of step.
       stepEvents.inc(
         {
-          pipeline: pipeline.name,
           step: pipeline.steps[index].name,
           flow: "out",
         },
@@ -163,8 +162,9 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
       // Send the event to the bus queue.
       return events.forEach((event) => {
         if (!busQueue.push([index, event])) {
+          logger.debug("Couldn't catch event", event.signature, "in bus queue");
           deadEvents.push(event);
-          deadEventsMetric.set({ pipeline: pipeline.name }, deadEvents.length);
+          deadEventsMetric.set(deadEvents.length);
         }
       });
     };
@@ -191,7 +191,6 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
       // Increase in-flow metrics of next steps.
       nextNodeIndices.forEach((nodeIndex) =>
         stepEvents.inc({
-          pipeline: pipeline.name,
           step: pipeline.steps[nodeIndex].name,
           flow: "in",
         })
@@ -201,8 +200,14 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
         .map((nodeIndex) => (steps.get(nodeIndex) as Step).send(event))
         .every((s) => s);
       if (!sent) {
+        logger.debug(
+          "Couldn't forward event",
+          event.signature,
+          "to at least one node in",
+          nextNodeIndices
+        );
         deadEvents.push(event);
-        deadEventsMetric.set({ pipeline: pipeline.name }, deadEvents.length);
+        deadEventsMetric.set(deadEvents.length);
       }
       if (nextNodeIndices.length === 0) {
         yield event;

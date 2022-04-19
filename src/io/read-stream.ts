@@ -120,10 +120,10 @@ export const mapParse = <T>(
   });
   // Attempt to parse whatever was left.
   stream.on("end", () => {
-    logger.debug("Parsed stream ended");
     done = true;
     extractLinesIntoQueue(fn, Buffer.concat(chunks), queue, true);
     queue.close();
+    logger.debug("Parsed stream ended. Queue has", queue.data.length, "items");
   });
   // Attempt to parse whatever was left.
   stream.on("error", (err) => {
@@ -131,6 +131,11 @@ export const mapParse = <T>(
     done = true;
     extractLinesIntoQueue(fn, Buffer.concat(chunks), queue, true);
     queue.close();
+    logger.debug(
+      "Parsed stream ended with error. Queue has",
+      queue.data.length,
+      "items"
+    );
   });
   return queue.iterator();
 };

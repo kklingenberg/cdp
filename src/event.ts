@@ -115,6 +115,10 @@ export class Event {
       t: this.trace,
     };
   }
+
+  toString(): string {
+    return `Event<${this.signature}>`;
+  }
 }
 
 /**

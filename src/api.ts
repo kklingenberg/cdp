@@ -701,7 +701,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
       if (typeof fn["send-receive-http"] !== "string") {
         if (typeof fn["send-receive-http"].wrap !== "undefined") {
           validateWrap(
-            fn["send-receive-jq"].wrap,
+            fn["send-receive-http"].wrap,
             `step '${name}' wrap option`
           );
         }
@@ -736,9 +736,9 @@ export const runPipeline = async (
   template: PipelineTemplate
 ): Promise<[Promise<void>, () => void]> => {
   // Zero pipeline metrics.
-  pipelineEvents.inc({ pipeline: template.name, flow: "in" }, 0);
-  pipelineEvents.inc({ pipeline: template.name, flow: "out" }, 0);
-  deadEvents.set({ pipeline: template.name }, 0);
+  pipelineEvents.inc({ flow: "in" }, 0);
+  pipelineEvents.inc({ flow: "out" }, 0);
+  deadEvents.set(0);
   // Create the input channel.
   const signature = await getSignature(template);
   let inputChannel: Channel<never, Event>;
@@ -772,8 +772,8 @@ export const runPipeline = async (
   const steps: StepDefinition[] = [];
   for (const [name, definition] of Object.entries(template.steps ?? {})) {
     // Zero step metrics.
-    stepEvents.inc({ pipeline: template.name, step: name, flow: "in" }, 0);
-    stepEvents.inc({ pipeline: template.name, step: name, flow: "out" }, 0);
+    stepEvents.inc({ step: name, flow: "in" }, 0);
+    stepEvents.inc({ step: name, flow: "out" }, 0);
     // Extract parameters.
     const window = definition.window ?? { events: 1, seconds: -1 };
     const patternMode: "pass" | "drop" =
@@ -877,7 +877,7 @@ export const runPipeline = async (
   const connectedChannel = compose(
     pipelineChannel,
     flatMap(async (e: Event) => {
-      pipelineEvents.inc({ pipeline: template.name, flow: "in" }, 1);
+      pipelineEvents.inc({ flow: "in" }, 1);
       return [e];
     }, inputChannel)
   );
@@ -885,9 +885,10 @@ export const runPipeline = async (
   const operate = async (): Promise<void> => {
     for await (const event of connectedChannel.receive) {
       // `event` already went through the whole pipeline.
-      pipelineEvents.inc({ pipeline: template.name, flow: "out" }, 1);
+      pipelineEvents.inc({ flow: "out" }, 1);
       logger.debug("Event", event.signature, "reached the end of the pipeline");
     }
+    logger.debug("Finished pipeline operation");
   };
   // Monitor the health of the multi-process system and shut
   // everything off if any piece is unhealthy.

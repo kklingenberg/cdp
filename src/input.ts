@@ -62,6 +62,7 @@ export const makeSTDINInput = (
         close: async () => {
           process.stdin.destroy();
           await drained;
+          logger.debug("Drained STDIN input");
         },
       },
       eventParser,
@@ -122,6 +123,7 @@ export const makeHTTPInput = (
         close: async () => {
           await server.close();
           await channel.close();
+          logger.debug("Drained HTTP input");
         },
       },
       eventParser,
@@ -210,6 +212,7 @@ export const makePollInput = (
           clearInterval(interval);
           await channel.close();
           notifyDrained();
+          logger.debug("Drained poll input");
         },
       },
       eventParser,
