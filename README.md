@@ -547,6 +547,17 @@ format of events ahead of time, and can also be used to communicate in
 plain text formats (i.e. non-JSON). To do that, simply return string
 values from your `jq` filters.
 
+### Metrics
+
+Any running instance of CDP can expose operation metrics, which can be
+checked by accessing <http://localhost:8001/metrics> by default (the
+path and port can be changed with the `METRICS_EXPOSITION_PATH` and
+`METRICS_EXPOSITION_PORT` variables; set `METRICS_EXPOSITION_PATH` to
+an empty string to disable exposition). Metrics are exposed in the
+[open metrics
+format](https://github.com/OpenObservability/OpenMetrics), so they
+should be able to be scraped by a Prometheus instance without issue.
+
 ### Additional configuration
 
 A CDP program can be further configured with certain environment

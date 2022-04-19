@@ -1,0 +1,21 @@
+global:
+  scrape_interval:     10s
+  evaluation_interval: 10s
+
+scrape_configs:
+
+  # Scrape self, the 'source' of metrics.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Scrape cdp
+  - job_name: "cdp"
+    static_configs:
+      - targets: ["cdp:8001"]
+
+  # Scrape pushgateway, where the results of post-processing are collected.
+  - job_name: "pushgateway"
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]

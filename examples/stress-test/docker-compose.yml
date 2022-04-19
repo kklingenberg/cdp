@@ -12,6 +12,7 @@ services:
     command: ["-e", "/app/pipeline.yaml"]
     ports:
       - 8000:8000
+      - 8001:8001
     restart: "no"
 
   input:

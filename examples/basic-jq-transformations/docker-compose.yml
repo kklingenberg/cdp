@@ -8,3 +8,5 @@ services:
     volumes:
       - .:/app
     command: ["-e", "/app/pipeline.yaml"]
+    ports:
+      - 8001:8001

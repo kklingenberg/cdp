@@ -1,0 +1,13 @@
+---
+name: "Prometheus metrics post-processing"
+
+# TODO configure pipeline properly
+input:
+  http:
+    endpoint: /events
+    port: 8000
+
+steps:
+  print:
+    flatmap:
+      send-stdout:

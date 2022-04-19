@@ -8,7 +8,12 @@ import {
 } from "./event";
 import { makeSTDINInput, makeHTTPInput, makePollInput } from "./input";
 import { isHealthy } from "./io/jq";
-import { pipelineEvents, stepEvents, deadEvents } from "./metrics";
+import {
+  pipelineEvents,
+  stepEvents,
+  deadEvents,
+  startExposingMetrics,
+} from "./metrics";
 import {
   isValidEventName,
   Pattern,
@@ -881,6 +886,8 @@ export const runPipeline = async (
       return [e];
     }, inputChannel)
   );
+  // Expose metrics in openmetrics format.
+  const stopExposingMetrics = startExposingMetrics();
   // Start it up.
   const operate = async (): Promise<void> => {
     for await (const event of connectedChannel.receive) {
@@ -889,6 +896,7 @@ export const runPipeline = async (
       logger.debug("Event", event.signature, "reached the end of the pipeline");
     }
     logger.debug("Finished pipeline operation");
+    await stopExposingMetrics();
   };
   // Monitor the health of the multi-process system and shut
   // everything off if any piece is unhealthy.
