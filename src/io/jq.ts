@@ -1,9 +1,10 @@
 import { spawn, ChildProcess } from "child_process";
 import { accessSync, constants, statSync } from "fs";
-import { Channel } from "../async-queue";
+import { Readable } from "stream";
+import { AsyncQueue, Channel } from "../async-queue";
 import { chain } from "../utils";
 import { PATH } from "../conf";
-import { parse } from "./read-stream";
+import { parseJson } from "./read-stream";
 
 /**
  * Attempts to locate the absolute path of the jq executable.
@@ -82,7 +83,8 @@ const wrapJqProgram = (program: string): string => `try (${program})`;
  * @returns A promise yielding a channel.
  */
 export const makeChannel = async <T>(
-  program: string
+  program: string,
+  parse?: (stream: Readable, limit?: number) => AsyncGenerator<unknown>
 ): Promise<Channel<T, unknown>> => {
   const path = getJqPath();
   if (path === null) {
@@ -111,16 +113,16 @@ export const makeChannel = async <T>(
     onError(err);
   });
   await precondition;
-  const send = (...values: T[]): boolean => {
-    for (const value of values) {
-      if (child.stdin.writable) {
-        child.stdin.write(JSON.stringify(value) + "\n");
-      } else {
-        return false;
+  const parseStream = parse ?? parseJson;
+  const bufferChannel: Channel<T, T> = new AsyncQueue<T>().asChannel();
+  const feedEnded: Promise<void> = (async () => {
+    for await (const value of bufferChannel.receive) {
+      const flushed = child.stdin.write(JSON.stringify(value) + "\n");
+      if (!flushed) {
+        await new Promise((resolve) => child.stdin.once("drain", resolve));
       }
     }
-    return true;
-  };
+  })();
   let notifyEnded: () => void;
   const ended: Promise<void> = new Promise((resolve) => {
     notifyEnded = resolve;
@@ -131,9 +133,11 @@ export const makeChannel = async <T>(
   }
   /* eslint-enable require-yield */
   return {
-    send,
-    receive: chain(parse(child.stdout), closeStream()),
+    send: bufferChannel.send.bind(bufferChannel),
+    receive: chain(parseStream(child.stdout), closeStream()),
     close: async () => {
+      await bufferChannel.close();
+      await feedEnded;
       child.stdin.end();
       await ended;
       if (child.kill() && typeof child.pid !== "undefined") {

@@ -23,12 +23,6 @@ The example shows a pipeline that takes input from an [HTTP
 input](/../../#input-forms) and executes a single trivial pipeline step
 that prints them.
 
-The HTTP input form allows for metrics exposition, which can be
-checked by accessing <http://localhost:8000/metrics>. Metrics are
-exposed in the [open metrics
-format](https://github.com/OpenObservability/OpenMetrics), so they
-should be able to be scraped by a prometheus instance without issue.
-
 ## Pipeline file
 
 A copy of the [pipeline file](pipeline.yaml) is included here for

@@ -157,11 +157,22 @@ Input forms follow the schema:
 **`input`** required **object**, a structure containing a single input
 form.
 
+#### `stdin`
+
 **`input.stdin`** **object** or **null**, the input form that makes a
 pipeline read source data from standard input.
 
-**`input.stdin.wrap`** optional **string**, an event name given to all
-source data received, which will be wrapped.
+**`input.stdin.wrap`** optional **string** or **object**, a wrapping
+directive which specifies that incoming data is not encoded events,
+and thus should be wrapped.
+
+**`input.stdin.wrap.name`** required **string**, the name given to the
+events that wrap the input data.
+
+**`input.stdin.wrap.raw`** optional **boolean**, whether to treat
+incoming data as plain text, not JSON.
+
+#### `http`
 
 **`input.http`** **object** or **string**, the input form that makes a
 pipeline receive source data from HTTP POST requests. If given as a
@@ -175,20 +186,59 @@ numeric TCP port to listen on. The default value is determined by the
 `HTTP_SERVER_DEFAULT_PORT` variable, and it has a default value of
 `8000`.
 
-**`input.http.wrap`** optional **string**, an event name given to all
-source data received, which will be wrapped.
+**`input.http.wrap`** optional **string** or **object**, a wrapping
+directive which specifies that incoming data is not encoded events,
+and thus should be wrapped.
+
+**`input.http.wrap.name`** required **string**, the name given to the
+events that wrap the input data.
+
+**`input.http.wrap.raw`** optional **boolean**, whether to treat
+incoming data as plain text, not JSON.
+
+#### `poll`
+
+**`input.poll`** **object** or **string**, the input form that makes a
+pipeline actively fetch data periodically from a remote source using
+HTTP requests.. If given as a string, it indicates the URI of the
+remote event source.
+
+**`input.poll.target`** required **string**, the target URI to use for
+the event-fetching request.
+
+**`input.poll.seconds`** optional **number** or **string**, the time
+interval between two consecutive fetch requests. If omitted it will
+default to the value of the `POLL_INPUT_DEFAULT_INTERVAL` environment
+variable, or `5` if the variable is not set.
+
+**`input.poll.headers`** optional **object**, HTTP headers to use for
+each request.
+
+**`input.poll.wrap`** optional **string** or **object**, a wrapping
+directive which specifies that incoming data is not encoded events,
+and thus should be wrapped.
+
+**`input.poll.wrap.name`** required **string**, the name given to the
+events that wrap the input data.
+
+**`input.poll.wrap.raw`** optional **boolean**, whether to treat
+incoming data as plain text, not JSON.
 
 #### Wrapping
 
-Both input forms and some step functions offer the option of wrapping
+All input forms and some step functions offer the option of wrapping
 the captured data with the `wrap` option. It indicates whether the
-data captured is considered to be the raw (JSON-encoded) data and
-should be wrapped in events with the specified name. If not given,
-captured data must be fully-encoded events.
+data captured is considered to be the raw JSON-encoded data or raw
+UTF-8 encoded strings and should be wrapped in events with the
+specified name. If not given, captured data must be fully JSON-encoded
+events.
 
 For example, if receiving data such as `{"this": "is my data"}` is to
-be supported, a wrapper would need to be used since it doesn't comply
-with the [event format](#what-cdp-understands-by-data).
+be supported, a wrapper would need to be used since the data doesn't
+comply with the [event
+format](#what-cdp-understands-by-data). Moreover, if the data received
+is something like `this is my data` (a plain UTF-8 text), then the
+`raw` wrapping would be needed.
 
 ### Step dependencies
 
@@ -350,10 +400,10 @@ steps:
 ```
 
 The only difference between `foo` and `bar` is the operation mode. If
-receiving as input events A, B, C, D, and E, the step `foo` would
-print to stdout two vectors: [A, B, C] and [D, E]. The step `bar`
-would print five vectors: [A, B, C], [B, C, D], [C, D, E], [D, E] and
-finally [E].
+receiving as input events **A**, **B**, **C**, **D**, and **E**, the
+step `foo` would print to stdout two vectors: **(A, B, C)** and **(D,
+E)**. The step `bar` would print five vectors: **(A, B, C)**, **(B, C,
+D)**, **(C, D, E)**, **(D, E)** and finally **(E)**.
 
 In general, the use of `flatmap` implies much more processing load.
 
@@ -441,8 +491,15 @@ string, it's used as the `jq` filter.
 **string**, the `jq` filter to use.
 
 **`steps.<name>.(reduce|flatmap).send-receive-jq.wrap`** optional
-**string**, an event name given to all data received from `jq`, which
-will be wrapped. Se [wrapping](#wrapping).
+**string** or **object**, a wrapping directive which specifies that
+incoming data from `jq` is not encoded events, and thus should be
+wrapped. See [wrapping](#wrapping).
+
+**`steps.<name>.(reduce|flatmap).send-receive-jq.wrap.name`** required
+**string**, the name given to the events that wrap the received data.
+
+**`steps.<name>.(reduce|flatmap).send-receive-jq.wrap.raw`** optional
+**boolean**, whether to treat received data as plain text, not JSON.
 
 #### `send-receive-http`
 
@@ -468,13 +525,38 @@ the request is forced to `application/x-ndjson`.
 using the `jq-expr` option, the request content type cannot be
 altered.
 
+**`steps.<name>.(reduce|flatmap).send-receive-http.wrap`** optional
+**string** or **object**, a wrapping directive which specifies that
+incoming data from the HTTP response is not encoded events, and thus
+should be wrapped. See [wrapping](#wrapping).
+
+**`steps.<name>.(reduce|flatmap).send-receive-http.wrap.name`**
+required **string**, the name given to the events that wrap the
+received data.
+
+**`steps.<name>.(reduce|flatmap).send-receive-http.wrap.raw`**
+optional **boolean**, whether to treat received data as plain text,
+not JSON.
+
 #### About `jq` expressions
 
-Several step processing functions have the option of using `jq` as a
-pre-processing step (typically under a `jq-expr` option). This can be
-used to change the format of events ahead of time, and can also be
-used to communicate in plain text formats (i.e. non-JSON). To do that,
-simply return string values from your `jq` filters.
+Several step processing functions have the option of using
+[`jq`](https://stedolan.github.io/jq/) as a pre-processing step
+(typically under a `jq-expr` option). This can be used to change the
+format of events ahead of time, and can also be used to communicate in
+plain text formats (i.e. non-JSON). To do that, simply return string
+values from your `jq` filters.
+
+### Metrics
+
+Any running instance of CDP can expose operation metrics, which can be
+checked by accessing <http://localhost:8001/metrics> by default (the
+path and port can be changed with the `METRICS_EXPOSITION_PATH` and
+`METRICS_EXPOSITION_PORT` variables; set `METRICS_EXPOSITION_PATH` to
+an empty string to disable exposition). Metrics are exposed in the
+[open metrics
+format](https://github.com/OpenObservability/OpenMetrics), so they
+should be able to be scraped by a Prometheus instance without issue.
 
 ### Additional configuration
 

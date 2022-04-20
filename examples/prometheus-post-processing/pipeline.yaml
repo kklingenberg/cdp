@@ -1,0 +1,91 @@
+---
+name: "Prometheus metrics post-processing"
+
+input:
+  poll:
+    target: http://prometheus:9090/federate?match[]=prometheus_http_requests_total
+    seconds: 5
+    wrap:
+      name: _
+      raw: true
+
+steps:
+
+  # This step reads metric lines and parses them into events. The
+  # metric name is stored as the event's name, while the metric labels
+  # and value are stored in the event's payload. The payload structure
+  # is:
+  # - **v**: number, the metric value.
+  # - **l**: object or null, the labels collected.
+  # The metric type is notably not included anywhere, to keep this
+  # example short.
+  parse:
+    flatmap:
+      send-receive-jq: |-
+        .[0].t as $trace
+        | .[].d
+        | if startswith("#") or . == "" then empty else . end
+        | split(" ")
+        | .[1] as $value
+        | .[0]
+        | capture("(?<n>[^{]+)({(?<labels>.+)})?")
+        | {
+          n: .n,
+          d: {
+            v: ($value | tonumber),
+            l: (if (.labels == null) then null else (
+              .labels
+              | split(",")
+              | map(ltrimstr(" "))
+              | map(rtrimstr(" "))
+              | map(split("="))
+              | map({key: .[0], value: .[1][1:-1]})
+              | map(select(.key != "job" and .key != "instance"))
+              | from_entries
+            ) end)
+          },
+          t: $trace
+        }
+
+  # Debug the parsed metrics.
+  print:
+    after:
+      - parse
+    flatmap:
+      send-stdout:
+
+  # This is a toy example that simply squares each metric.
+  square:
+    after:
+      - parse
+    flatmap:
+      send-receive-jq: |-
+        .[] | . * {d: (.d * {v: (.d.v * .d.v)})}
+
+  # Send to pushgateway.
+  push:
+    after:
+      - square
+    window:
+      events: 1000
+      seconds: 4
+    reduce:
+      send-http:
+        target: http://pushgateway:9091/metrics/job/cdp_postprocessor/instance/cdp
+        headers:
+          Content-Type: text/plain; version=0.0.4
+        jq-expr: |
+          def formatlabels:
+            if .d.l == null
+            then ""
+            else "{" + (
+              .d.l
+              | to_entries
+              | map(.key + "=" + (.value | tojson))
+              | join(",")
+            ) + "}"
+            end;
+
+          "# TYPE postprocessed_" + .[0].n + " gauge\n" +
+          (map("postprocessed_" + .n + formatlabels + " " + (.d.v | tostring)) | join("\n")) +
+          "\n"

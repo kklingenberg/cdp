@@ -16,6 +16,13 @@ export interface Channel<SendType, ReceiveType> {
 }
 
 /**
+ * A catalog of active queues, used for monitoring.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export const activeQueues: Set<AsyncQueue<any>> = new Set();
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
  * A queue class that resolves a shift() call only when there's
  * elements in the queue.
  */
@@ -75,6 +82,7 @@ export class AsyncQueue<Type> {
         }
       }
     };
+    activeQueues.add(this);
   }
 
   /**
@@ -100,6 +108,7 @@ export class AsyncQueue<Type> {
     this.releaseLock();
     if (this.data.length === 0) {
       this.notifyDrained();
+      activeQueues.delete(this);
     }
   }
 
@@ -119,6 +128,7 @@ export class AsyncQueue<Type> {
       });
     } else if (this.data.length === 0 && this.closed) {
       this.notifyDrained();
+      activeQueues.delete(this);
     }
     return value;
   }
@@ -136,6 +146,13 @@ export class AsyncQueue<Type> {
         await this.drain;
       },
     };
+  }
+
+  /**
+   * Return a string representation of this queue.
+   */
+  toString(): string {
+    return `AsyncQueue<closed=${this.closed}, items=${this.data.length}>`;
   }
 }
 
@@ -193,7 +210,7 @@ export const compose = <A, B, C>(
       c1.receive.next().then((x) => ({ x, yields: true })),
       c2.receive.next().then((x) => ({ x, yields: false })),
     ];
-    while (eventSlice[0] !== null && eventSlice[1] !== null) {
+    while (eventSlice[0] !== null || eventSlice[1] !== null) {
       const {
         x: { done, value },
         yields,

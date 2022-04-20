@@ -1,12 +1,10 @@
 import { Server } from "http";
 import Koa from "koa";
-import client from "prom-client";
 import { isHealthy } from "./jq";
 import {
   HTTP_SERVER_LISTEN_ADDRESS,
   HTTP_SERVER_LISTEN_BACKLOG,
   HTTP_SERVER_HEALTH_ENDPOINT,
-  HTTP_SERVER_METRICS_ENDPOINT,
 } from "../conf";
 import { makeLogger } from "../utils";
 
@@ -24,12 +22,6 @@ interface HTTPServer {
   close: () => Promise<void>;
   closed: Promise<void>;
 }
-
-/**
- * Source:
- * https://github.com/prometheus/docs/blob/main/content/docs/instrumenting/exposition_formats.md
- */
-const METRICS_CONTENT_TYPE = "text/plain; version=0.0.4";
 
 /**
  * A server is built from a single handler. The server then listens
@@ -70,13 +62,6 @@ export const makeHTTPServer = (
           ctx.body = JSON.stringify({ status: "fail" });
           ctx.status = 500;
         }
-      } else if (
-        HTTP_SERVER_METRICS_ENDPOINT.length > 0 &&
-        ctx.request.method === "GET" &&
-        ctx.request.path === HTTP_SERVER_METRICS_ENDPOINT
-      ) {
-        ctx.body = await client.register.metrics();
-        ctx.type = METRICS_CONTENT_TYPE;
       } else {
         logger.info(
           "Received unrecognized request:",

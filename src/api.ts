@@ -1,9 +1,19 @@
 import { Channel, flatMap, compose } from "./async-queue";
 import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
-import { Event } from "./event";
-import { makeSTDINInput, makeHTTPInput } from "./input";
+import {
+  Event,
+  WrapDirective,
+  wrapDirectiveSchema,
+  validateWrap,
+} from "./event";
+import { makeSTDINInput, makeHTTPInput, makePollInput } from "./input";
 import { isHealthy } from "./io/jq";
-import { pipelineEvents, stepEvents, deadEvents } from "./metrics";
+import {
+  pipelineEvents,
+  stepEvents,
+  deadEvents,
+  startExposingMetrics,
+} from "./metrics";
 import {
   isValidEventName,
   Pattern,
@@ -31,7 +41,7 @@ const logger = makeLogger("api");
  * The `stdin` input form ingests events from STDIN.
  */
 interface STDINInputTemplate {
-  stdin: { wrap?: string } | null;
+  stdin: { wrap?: WrapDirective } | null;
 }
 const stdinInputTemplateSchema = {
   type: "object",
@@ -40,7 +50,7 @@ const stdinInputTemplateSchema = {
       anyOf: [
         {
           type: "object",
-          properties: { wrap: { type: "string", minLength: 1 } },
+          properties: { wrap: wrapDirectiveSchema },
           additionalProperties: false,
           required: [],
         },
@@ -53,7 +63,7 @@ const stdinInputTemplateSchema = {
 };
 
 /**
- * The `http` input form ingests events from an HTTP endpoint.
+ * The `http` input form ingests events at an HTTP endpoint.
  */
 interface HTTPInputTemplate {
   http:
@@ -61,7 +71,7 @@ interface HTTPInputTemplate {
     | {
         endpoint: string;
         port?: number | string;
-        wrap?: string;
+        wrap?: WrapDirective;
       };
 }
 const httpInputTemplateSchema = {
@@ -80,10 +90,7 @@ const httpInputTemplateSchema = {
                 { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
               ],
             },
-            wrap: {
-              type: "string",
-              minLength: 1,
-            },
+            wrap: wrapDirectiveSchema,
           },
           additionalProperties: false,
           required: ["endpoint"],
@@ -93,6 +100,58 @@ const httpInputTemplateSchema = {
   },
   additionalProperties: false,
   required: ["http"],
+};
+
+/**
+ * The `poll` input form pulls events by executing HTTP GET requests.
+ */
+interface PollInputTemplate {
+  poll:
+    | string
+    | {
+        target: string;
+        seconds?: number | string;
+        headers?: { [key: string]: string | number | boolean };
+        wrap?: WrapDirective;
+      };
+}
+const pollInputTemplateSchema = {
+  type: "object",
+  properties: {
+    poll: {
+      anyOf: [
+        { type: "string", minLength: 1 },
+        {
+          type: "object",
+          properties: {
+            target: { type: "string", minLength: 1 },
+            seconds: {
+              anyOf: [
+                { type: "number", exclusiveMinimum: 0 },
+                { type: "string", pattern: "^[0-9]+\\.?[0-9]*$" },
+              ],
+            },
+            headers: {
+              type: "object",
+              properties: {},
+              additionalProperties: {
+                anyOf: [
+                  { type: "string" },
+                  { type: "number" },
+                  { type: "boolean" },
+                ],
+              },
+            },
+            wrap: wrapDirectiveSchema,
+          },
+          additionalProperties: false,
+          required: ["target"],
+        },
+      ],
+    },
+  },
+  additionalProperties: false,
+  required: ["poll"],
 };
 
 /**
@@ -280,7 +339,7 @@ interface SendReceiveJqFunctionTemplate {
     | string
     | {
         ["jq-expr"]: string;
-        wrap?: string;
+        wrap?: WrapDirective;
       };
 }
 const sendReceiveJqFunctionTemplateSchema = {
@@ -293,7 +352,7 @@ const sendReceiveJqFunctionTemplateSchema = {
           type: "object",
           properties: {
             "jq-expr": { type: "string", minLength: 1 },
-            wrap: { type: "string", minLength: 1 },
+            wrap: wrapDirectiveSchema,
           },
           additionalProperties: false,
           required: ["jq-expr"],
@@ -318,7 +377,7 @@ interface SendReceiveHTTPFunctionTemplate {
         target: string;
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
-        wrap?: string;
+        wrap?: WrapDirective;
       };
 }
 const sendReceiveHTTPFunctionTemplateSchema = {
@@ -343,7 +402,7 @@ const sendReceiveHTTPFunctionTemplateSchema = {
                 ],
               },
             },
-            wrap: { type: "string", minLength: 1 },
+            wrap: wrapDirectiveSchema,
           },
           additionalProperties: false,
           required: ["target"],
@@ -361,7 +420,7 @@ const sendReceiveHTTPFunctionTemplateSchema = {
  */
 interface PipelineTemplate {
   name: string;
-  input: STDINInputTemplate | HTTPInputTemplate;
+  input: STDINInputTemplate | HTTPInputTemplate | PollInputTemplate;
   steps?: {
     [key: string]: {
       after?: string[];
@@ -396,7 +455,13 @@ const pipelineTemplateSchema = {
   type: "object",
   properties: {
     name: { type: "string", minLength: 1 },
-    input: { anyOf: [stdinInputTemplateSchema, httpInputTemplateSchema] },
+    input: {
+      anyOf: [
+        stdinInputTemplateSchema,
+        httpInputTemplateSchema,
+        pollInputTemplateSchema,
+      ],
+    },
     steps: {
       type: "object",
       properties: {},
@@ -484,9 +549,29 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   // restriction.
   // 1. Check the input forms.
   const { input } = thing as { input: object };
+  if ("poll" in input) {
+    const { poll } = input as { poll: object };
+    // 1.1 Check that the poll interval is valid, if given as a string.
+    if (typeof poll === "object" && "seconds" in poll) {
+      const { seconds } = poll as { seconds?: number | string };
+      if (typeof seconds === "string") {
+        const numericSeconds = parseFloat(seconds);
+        if (numericSeconds <= 0) {
+          throw new Error(
+            `the input has an invalid value for poll.seconds (must be > 0)`
+          );
+        }
+      }
+    }
+    // 1.2 Check that the wrap directive is valid, if given.
+    if (typeof poll === "object" && "wrap" in poll) {
+      const { wrap } = poll as { wrap: unknown };
+      validateWrap(wrap, "the input's wrap option");
+    }
+  }
   if ("http" in input) {
     const { http } = input as { http: object };
-    // 1.1 Check that the input port is valid, if given as a string.
+    // 1.3 Check that the input port is valid, if given as a string.
     if (typeof http === "object" && "port" in http) {
       const { port } = http as { port: unknown };
       if (typeof port === "string") {
@@ -498,26 +583,18 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
         }
       }
     }
-    // 1.2 Check that the wrap string is a valid event name, if given.
+    // 1.4 Check that the wrap directive is valid, if given.
     if (typeof http === "object" && "wrap" in http) {
-      const { wrap } = http as { wrap: string };
-      if (!isValidEventName(wrap)) {
-        throw new Error(
-          "the input's wrap option is invalid: it must be a proper event name"
-        );
-      }
+      const { wrap } = http as { wrap: unknown };
+      validateWrap(wrap, "the input's wrap option");
     }
   }
   if ("stdin" in input) {
     const { stdin } = input as { stdin: object | null };
-    // 1.3 Check that the wrap string is a valid event name, if given.
+    // 1.5 Check that the wrap directive is valid, if given.
     if (stdin !== null && "wrap" in stdin) {
-      const { wrap } = stdin as { wrap: string };
-      if (!isValidEventName(wrap)) {
-        throw new Error(
-          "the input's wrap option is invalid: it must be a proper event name"
-        );
-      }
+      const { wrap } = stdin as { wrap: unknown };
+      validateWrap(wrap, "the input's wrap option");
     }
   }
   // 2. Check each step.
@@ -617,23 +694,21 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     // the wrap option is valid, if given.
     if ("send-receive-jq" in fn) {
       if (typeof fn["send-receive-jq"] !== "string") {
-        if (typeof fn["send-receive-jq"].wrap === "string") {
-          if (!isValidEventName(fn["send-receive-jq"].wrap)) {
-            throw new Error(
-              `step '${name}' uses an invalid wrap option: it must be a proper event name`
-            );
-          }
+        if (typeof fn["send-receive-jq"].wrap !== "undefined") {
+          validateWrap(
+            fn["send-receive-jq"].wrap,
+            `step '${name}' wrap option`
+          );
         }
       }
     }
     if ("send-receive-http" in fn) {
       if (typeof fn["send-receive-http"] !== "string") {
-        if (typeof fn["send-receive-http"].wrap === "string") {
-          if (!isValidEventName(fn["send-receive-http"].wrap)) {
-            throw new Error(
-              `step '${name}' uses an invalid wrap option: it must be a proper event name`
-            );
-          }
+        if (typeof fn["send-receive-http"].wrap !== "undefined") {
+          validateWrap(
+            fn["send-receive-http"].wrap,
+            `step '${name}' wrap option`
+          );
         }
       }
     }
@@ -666,15 +741,22 @@ export const runPipeline = async (
   template: PipelineTemplate
 ): Promise<[Promise<void>, () => void]> => {
   // Zero pipeline metrics.
-  pipelineEvents.inc({ pipeline: template.name, flow: "in" }, 0);
-  pipelineEvents.inc({ pipeline: template.name, flow: "out" }, 0);
-  deadEvents.set({ pipeline: template.name }, 0);
+  pipelineEvents.inc({ flow: "in" }, 0);
+  pipelineEvents.inc({ flow: "out" }, 0);
+  deadEvents.set(0);
   // Create the input channel.
   const signature = await getSignature(template);
   let inputChannel: Channel<never, Event>;
   let inputEnded: Promise<void>;
   const inputKey = Object.keys(template.input)[0];
   switch (inputKey) {
+    case "poll":
+      [inputChannel, inputEnded] = makePollInput(
+        template.name,
+        signature,
+        (template.input as PollInputTemplate).poll
+      );
+      break;
     case "http":
       [inputChannel, inputEnded] = makeHTTPInput(
         template.name,
@@ -695,8 +777,8 @@ export const runPipeline = async (
   const steps: StepDefinition[] = [];
   for (const [name, definition] of Object.entries(template.steps ?? {})) {
     // Zero step metrics.
-    stepEvents.inc({ pipeline: template.name, step: name, flow: "in" }, 0);
-    stepEvents.inc({ pipeline: template.name, step: name, flow: "out" }, 0);
+    stepEvents.inc({ step: name, flow: "in" }, 0);
+    stepEvents.inc({ step: name, flow: "out" }, 0);
     // Extract parameters.
     const window = definition.window ?? { events: 1, seconds: -1 };
     const patternMode: "pass" | "drop" =
@@ -800,17 +882,21 @@ export const runPipeline = async (
   const connectedChannel = compose(
     pipelineChannel,
     flatMap(async (e: Event) => {
-      pipelineEvents.inc({ pipeline: template.name, flow: "in" }, 1);
+      pipelineEvents.inc({ flow: "in" }, 1);
       return [e];
     }, inputChannel)
   );
+  // Expose metrics in openmetrics format.
+  const stopExposingMetrics = startExposingMetrics();
   // Start it up.
   const operate = async (): Promise<void> => {
     for await (const event of connectedChannel.receive) {
       // `event` already went through the whole pipeline.
-      pipelineEvents.inc({ pipeline: template.name, flow: "out" }, 1);
+      pipelineEvents.inc({ flow: "out" }, 1);
       logger.debug("Event", event.signature, "reached the end of the pipeline");
     }
+    logger.debug("Finished pipeline operation");
+    await stopExposingMetrics();
   };
   // Monitor the health of the multi-process system and shut
   // everything off if any piece is unhealthy.

@@ -1,7 +1,15 @@
 import { Channel, AsyncQueue } from "./async-queue";
-import { HTTP_SERVER_DEFAULT_PORT } from "./conf";
-import { Event, makeNewEventParser, parseChannel, makeWrapper } from "./event";
-import { parse } from "./io/read-stream";
+import { HTTP_SERVER_DEFAULT_PORT, POLL_INPUT_DEFAULT_INTERVAL } from "./conf";
+import {
+  Event,
+  arrivalTimestamp,
+  makeNewEventParser,
+  parseChannel,
+  WrapDirective,
+  chooseParser,
+  makeWrapper,
+} from "./event";
+import { axiosInstance } from "./io/axios";
 import { makeHTTPServer } from "./io/http-server";
 import { makeLogger } from "./utils";
 
@@ -26,8 +34,11 @@ const logger = makeLogger("input");
 export const makeSTDINInput = (
   pipelineName: string,
   pipelineSignature: string,
-  options: { wrap?: string } | null
+  options: { wrap?: WrapDirective } | null
 ): [Channel<never, Event>, Promise<void>] => {
+  const parse = chooseParser(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
   const wrapper = makeWrapper(options?.wrap);
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const rawReceive = parse(process.stdin);
@@ -37,6 +48,7 @@ export const makeSTDINInput = (
   });
   async function* receive() {
     for await (const value of rawReceive) {
+      arrivalTimestamp.update();
       yield wrapper(value);
     }
     notifyDrained();
@@ -52,6 +64,7 @@ export const makeSTDINInput = (
         close: async () => {
           process.stdin.destroy();
           await drained;
+          logger.debug("Drained STDIN input");
         },
       },
       eventParser,
@@ -77,8 +90,13 @@ export const makeSTDINInput = (
 export const makeHTTPInput = (
   pipelineName: string,
   pipelineSignature: string,
-  options: string | { endpoint: string; port?: number | string; wrap?: string }
+  options:
+    | string
+    | { endpoint: string; port?: number | string; wrap?: WrapDirective }
 ): [Channel<never, Event>, Promise<void>] => {
+  const parse = chooseParser(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
   const wrapper = makeWrapper(
     (typeof options === "string" ? {} : options)?.wrap
   );
@@ -91,6 +109,7 @@ export const makeHTTPInput = (
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const queue = new AsyncQueue<unknown>();
   const server = makeHTTPServer(endpoint, port, async (ctx) => {
+    arrivalTimestamp.update();
     for await (const thing of parse(ctx.req, ctx.request.length)) {
       queue.push(wrapper(thing));
     }
@@ -107,11 +126,102 @@ export const makeHTTPInput = (
         close: async () => {
           await server.close();
           await channel.close();
+          logger.debug("Drained HTTP input");
         },
       },
       eventParser,
       "parsing HTTP request body"
     ),
     server.closed,
+  ];
+};
+
+/**
+ * Creates an input channel based on data fetched periodically from
+ * HTTP requests to a remote endpoint. Returns a pair of [channel,
+ * endPromise].
+ *
+ * @param pipelineName The name of the pipeline that will use this
+ * input.
+ * @param pipelineSignature The signature of the pipeline that will
+ * use this input.
+ * @param options The polling options to configure the input channel.
+ * @returns A channel that fetches data from a remote endpoint
+ * periodically and forwards parsed events, and a promise that
+ * resolves when the input ends for any reason.
+ */
+export const makePollInput = (
+  pipelineName: string,
+  pipelineSignature: string,
+  options:
+    | string
+    | {
+        target: string;
+        seconds?: number | string;
+        headers?: { [key: string]: string | number | boolean };
+        wrap?: WrapDirective;
+      }
+): [Channel<never, Event>, Promise<void>] => {
+  const parse = chooseParser(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
+  const wrapper = makeWrapper(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
+  const target = typeof options === "string" ? options : options.target;
+  const headers = typeof options === "string" ? {} : options.headers ?? {};
+  const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
+  const queue = new AsyncQueue<unknown>();
+  // One poll is a GET request to the target.
+  const fetchOne = async () => {
+    try {
+      const response = await axiosInstance.get(target, { headers });
+      logger.info(
+        "Got response from poll target",
+        target,
+        ":",
+        response.status
+      );
+      arrivalTimestamp.update();
+      for await (const thing of parse(response.data)) {
+        queue.push(wrapper(thing));
+      }
+    } catch (err) {
+      logger.warn("Couldn't fetch data from poll target", target, ":", err);
+    }
+  };
+  // Start polling.
+  const lapse =
+    typeof options === "string"
+      ? POLL_INPUT_DEFAULT_INTERVAL
+      : typeof options.seconds === "string"
+      ? parseFloat(options.seconds)
+      : options.seconds ?? POLL_INPUT_DEFAULT_INTERVAL;
+  const interval = setInterval(fetchOne, lapse * 1000);
+  // Wrap the queue's channel to make it look like an input channel.
+  let notifyDrained: () => void;
+  const drained: Promise<void> = new Promise((resolve) => {
+    notifyDrained = resolve;
+  });
+  const channel = queue.asChannel();
+  return [
+    parseChannel(
+      {
+        ...channel,
+        send: () => {
+          logger.warn("Can't send events to an input channel");
+          return false;
+        },
+        close: async () => {
+          clearInterval(interval);
+          await channel.close();
+          notifyDrained();
+          logger.debug("Drained poll input");
+        },
+      },
+      eventParser,
+      "parsing HTTP response"
+    ),
+    drained,
   ];
 };

@@ -86,16 +86,33 @@ export const HTTP_SERVER_HEALTH_ENDPOINT: string =
   process.env.HTTP_SERVER_HEALTH_ENDPOINT ?? "/healthz";
 
 /**
+ * The time to wait between poll requests when using the `poll` input
+ * form without an explicit `poll.seconds` option set.
+ */
+export const POLL_INPUT_DEFAULT_INTERVAL: number = parseFloat(
+  process.env.POLL_INPUT_DEFAULT_INTERVAL ?? "5" // 5 seconds
+);
+
+/**
+ * The port used to expose prometheus metric.
+ */
+export const METRICS_EXPOSITION_PORT: number = parseInt(
+  process.env.METRICS_EXPOSITION_PORT ?? "8001",
+  10
+);
+
+/**
  * The endpoint which will expose prometheus metrics. Set to the empty
  * string to disable metrics exposition.
  */
-export const HTTP_SERVER_METRICS_ENDPOINT: string =
-  process.env.HTTP_SERVER_METRICS_ENDPOINT ?? "/metrics";
+export const METRICS_EXPOSITION_PATH: string =
+  process.env.METRICS_EXPOSITION_PATH ?? "/metrics";
 
 /**
  * The prefix used in prometheus metric names.
  */
-export const METRICS_PREFIX: string = process.env.METRICS_PREFIX ?? "cdp_";
+export const METRICS_NAME_PREFIX: string =
+  process.env.METRICS_NAME_PREFIX ?? "cdp_";
 
 /**
  * The timeout used for emitted HTTP requests.

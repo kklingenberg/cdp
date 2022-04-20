@@ -8,6 +8,8 @@ services:
     volumes:
       - .:/app
     command: ["-e", "/app/pipeline.yaml"]
+    ports:
+      - 8001:8001
     depends_on:
       - rooter
       - siner
@@ -17,8 +19,6 @@ services:
       dockerfile: external.Dockerfile
       args:
         - EXPR=sqrt
-    ports:
-      - 8000:80
 
   siner:
     build:

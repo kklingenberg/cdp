@@ -1,7 +1,13 @@
-import { Event, makeOldEventParser, parseVector, makeWrapper } from "../event";
+import {
+  Event,
+  makeOldEventParser,
+  parseVector,
+  WrapDirective,
+  chooseParser,
+  makeWrapper,
+} from "../event";
 import { makeLogger } from "../utils";
 import { axiosInstance } from "./axios";
-import { parse } from "./read-stream";
 
 /**
  * A logger instance namespaced to this module.
@@ -92,8 +98,7 @@ export const sendThing = (
  * @param headers The headers to use with the request. Any
  * content-type header will be overwritten with
  * 'application/x-ndjson'.
- * @param wrap An optional event name in case the response is to be
- * wrapped in a brand-new event envelope.
+ * @param wrap An optional wrapping directive for response data.
  * @returns A promise that resolves to the parsed events extracted
  * from the response, or an empty array if any error occurred.
  */
@@ -103,9 +108,10 @@ export const sendReceiveEvents = async (
   pipelineSignature: string,
   target: string,
   headers: { [key: string]: string | number | boolean },
-  wrap?: string
+  wrap?: WrapDirective
 ): Promise<Event[]> => {
   const oldEventParser = makeOldEventParser(pipelineName, pipelineSignature);
+  const parse = chooseParser(wrap);
   const wrapper = makeWrapper(wrap);
   try {
     const response = await axiosInstance.post(target, events, {
@@ -159,8 +165,7 @@ export const sendReceiveEvents = async (
  * for parsing events.
  * @param target The fully qualified URI of the target.
  * @param headers The headers to use with the request.
- * @param wrap An optional event name in case the response is to be
- * wrapped in a brand-new event envelope.
+ * @param wrap An optional wrapping directive for response data.
  * @returns A promise that resolves to the parsed events extracted
  * from the response, or an empty array if any error occurred.
  */
@@ -170,9 +175,10 @@ export const sendReceiveThing = async (
   pipelineSignature: string,
   target: string,
   headers: { [key: string]: string | number | boolean },
-  wrap?: string
+  wrap?: WrapDirective
 ): Promise<Event[]> => {
   const oldEventParser = makeOldEventParser(pipelineName, pipelineSignature);
+  const parse = chooseParser(wrap);
   const wrapper = makeWrapper(wrap);
   try {
     const response = await axiosInstance.post(target, thing, {
