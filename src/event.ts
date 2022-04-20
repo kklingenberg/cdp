@@ -188,6 +188,21 @@ const validateRawEvent = (raw: unknown): void => {
 };
 
 /**
+ * Provide a global source of time, to be set elsewhere when
+ * needed. This is used to mark new events arriving simultaneusly to
+ * have the same timestamp.
+ */
+export const arrivalTimestamp = {
+  _value: 0,
+  get value() {
+    return this._value;
+  },
+  update() {
+    this._value = new Date().getTime() / 1000;
+  },
+};
+
+/**
  * Builds a parser for **new events**, which are events that haven't
  * stemmed from the current pipeline and were captured by the input
  * form. As such, they will always receive a new trace point.
@@ -207,7 +222,7 @@ export const makeNewEventParser =
     const rawValid = raw as SerializedEvent;
     return make(rawValid.n, rawValid.d, [
       ...(rawValid.t ?? []),
-      { i: new Date().getTime() / 1000, p: pipelineName, h: pipelineSignature },
+      { i: arrivalTimestamp.value, p: pipelineName, h: pipelineSignature },
     ]);
   };
 

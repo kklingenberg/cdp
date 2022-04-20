@@ -2,6 +2,7 @@ import { Channel, AsyncQueue } from "./async-queue";
 import { HTTP_SERVER_DEFAULT_PORT, POLL_INPUT_DEFAULT_INTERVAL } from "./conf";
 import {
   Event,
+  arrivalTimestamp,
   makeNewEventParser,
   parseChannel,
   WrapDirective,
@@ -47,6 +48,7 @@ export const makeSTDINInput = (
   });
   async function* receive() {
     for await (const value of rawReceive) {
+      arrivalTimestamp.update();
       yield wrapper(value);
     }
     notifyDrained();
@@ -107,6 +109,7 @@ export const makeHTTPInput = (
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const queue = new AsyncQueue<unknown>();
   const server = makeHTTPServer(endpoint, port, async (ctx) => {
+    arrivalTimestamp.update();
     for await (const thing of parse(ctx.req, ctx.request.length)) {
       queue.push(wrapper(thing));
     }
@@ -179,6 +182,7 @@ export const makePollInput = (
         ":",
         response.status
       );
+      arrivalTimestamp.update();
       for await (const thing of parse(response.data)) {
         queue.push(wrapper(thing));
       }
