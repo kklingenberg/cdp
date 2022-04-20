@@ -1,13 +1,44 @@
 ---
 name: "Prometheus metrics post-processing"
 
-# TODO configure pipeline properly
 input:
-  http:
-    endpoint: /events
-    port: 8000
+  poll:
+    target: http://prometheus:9090/federate?match[]=prometheus_http_requests_total
+    seconds: 5
+    wrap:
+      name: _
+      raw: true
 
 steps:
+  parse:
+    flatmap:
+      send-receive-jq: |-
+        .[].d
+        | if startswith("#") or . == "" then empty else . end
+        | split(" ")
+        | .[1] as $value
+        | .[0]
+        | capture("(?<n>[^{]+)({(?<labels>.+)})?")
+        | {
+          n: .n,
+          d: {
+            value: ($value | tonumber),
+            labels: (if (.labels == null) then null else (
+              .labels
+              | split(",")
+              | map(ltrimstr(" "))
+              | map(rtrimstr(" "))
+              | map(split("="))
+              | map({key: .[0], value: .[1][1:-1]})
+              | map(select(.key != "job" and .key != "instance"))
+              | from_entries
+            ) end)
+          }
+        }
+
+  # TODO configure pipeline properly
   print:
+    after:
+      - parse
     flatmap:
       send-stdout:

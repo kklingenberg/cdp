@@ -1,5 +1,5 @@
 global:
-  scrape_interval:     10s
+  scrape_interval: 10s
   evaluation_interval: 10s
 
 scrape_configs:
@@ -9,12 +9,13 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # Scrape cdp
+  # Scrape cdp, for no good reason.
   - job_name: "cdp"
     static_configs:
       - targets: ["cdp:8001"]
 
-  # Scrape pushgateway, where the results of post-processing are collected.
+  # Scrape pushgateway, where the results of post-processing are
+  # collected.
   - job_name: "pushgateway"
     honor_labels: true
     static_configs:

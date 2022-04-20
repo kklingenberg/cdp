@@ -15,6 +15,7 @@ services:
     image: prom/prometheus:v2.34.0
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus:/prometheus
     ports:
       - 9090:9090
 
@@ -22,3 +23,6 @@ services:
     image: prom/pushgateway:v1.4.2
     ports:
       - 9091:9091
+
+volumes:
+  prometheus:
