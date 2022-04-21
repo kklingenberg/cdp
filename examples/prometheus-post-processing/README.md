@@ -52,7 +52,7 @@ three things:
 1. [The `poll` input form](/../../#poll).
 1. [The `wrap.raw` wrapping option](/../../#wrapping), used to
    tollerate the output of Prometheus' federation endpoint.
-1. Various uses of [`jq` filters](/../../#jq-expressions) to
+1. Various uses of [`jq` filters](/../../#about-jq-expressions) to
    manipulate data.
 
 ## Pipeline file

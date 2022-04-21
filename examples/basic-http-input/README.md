@@ -20,8 +20,8 @@ Logs of interest will be visible on the first terminal.
 ## What does it do?
 
 The example shows a pipeline that takes input from an [HTTP
-input](/../../#input-forms) and executes a single trivial pipeline step
-that prints them.
+input](/../../#http) and executes a single trivial pipeline step that
+prints them.
 
 ## Pipeline file
 
