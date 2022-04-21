@@ -581,6 +581,12 @@ format of events ahead of time, and can also be used to communicate in
 plain text formats (i.e. non-JSON). To do that, simply return string
 values from your `jq` filters.
 
+**Note**: CDP tries to protect the adjacent `jq` processes by wrapping
+all filters with a
+[`try`](https://stedolan.github.io/jq/manual/#try-catch) form. Runtime
+errors will thus be silently skipped over, so it can be very important
+to always test your `jq` filters in controlled environments.
+
 ### Metrics
 
 Any running instance of CDP can expose operation metrics, which can be

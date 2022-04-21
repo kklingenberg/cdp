@@ -131,6 +131,13 @@ export const HTTP_CLIENT_TIMEOUT: number = parseInt(
 );
 
 /**
+ * Whether to reject invalid TLS certificates. Defaults to `true`.
+ */
+export const HTTP_CLIENT_REJECT_UNAUTHORIZED = !["false", "no", "0"].includes(
+  (process.env.HTTP_CLIENT_REJECT_UNAUTHORIZED ?? "yes").toLowerCase()
+);
+
+/**
  * The upper limit of redirects accepted when emitting HTTP requests.
  */
 export const HTTP_CLIENT_MAX_REDIRECTS: number = parseInt(
