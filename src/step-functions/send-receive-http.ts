@@ -22,12 +22,15 @@ export const make = async (
     | string
     | {
         target: string;
+        method?: "POST" | "PUT" | "PATCH";
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
         wrap?: WrapDirective;
       }
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
+  const method =
+    typeof options === "string" ? "POST" : options.method ?? "POST";
   const headers = typeof options === "string" ? {} : options.headers ?? {};
   const wrap = typeof options === "string" ? undefined : options.wrap;
   if (typeof options !== "string" && typeof options["jq-expr"] === "string") {
@@ -41,6 +44,7 @@ export const make = async (
           pipelineName,
           pipelineSignature,
           target,
+          method,
           headers,
           wrap
         ),
@@ -55,6 +59,7 @@ export const make = async (
           pipelineName,
           pipelineSignature,
           target,
+          method,
           headers,
           wrap
         ),

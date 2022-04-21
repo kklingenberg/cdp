@@ -30,10 +30,14 @@ const logger = makeLogger("io/http-client");
 export const sendEvents = (
   events: Event[],
   target: string,
+  method: "POST" | "PUT" | "PATCH",
   headers: { [key: string]: string | number | boolean }
 ): Promise<void> =>
   axiosInstance
-    .post(target, events, {
+    .request({
+      url: target,
+      method,
+      data: events,
       transformRequest: [
         (data: Event[]) => data.map((e) => JSON.stringify(e)).join("\n") + "\n",
       ],
@@ -69,10 +73,14 @@ export const sendEvents = (
 export const sendThing = (
   thing: unknown,
   target: string,
+  method: "POST" | "PUT" | "PATCH",
   headers: { [key: string]: string | number | boolean }
 ): Promise<void> =>
   axiosInstance
-    .post(target, thing, {
+    .request({
+      url: target,
+      method,
+      data: thing,
       transformRequest: [
         (data) => (typeof data === "string" ? data : JSON.stringify(data)),
       ],
@@ -107,6 +115,7 @@ export const sendReceiveEvents = async (
   pipelineName: string,
   pipelineSignature: string,
   target: string,
+  method: "POST" | "PUT" | "PATCH",
   headers: { [key: string]: string | number | boolean },
   wrap?: WrapDirective
 ): Promise<Event[]> => {
@@ -114,7 +123,10 @@ export const sendReceiveEvents = async (
   const parse = chooseParser(wrap);
   const wrapper = makeWrapper(wrap);
   try {
-    const response = await axiosInstance.post(target, events, {
+    const response = await axiosInstance.request({
+      url: target,
+      method,
+      data: events,
       transformRequest: [
         (data: Event[]) => data.map((e) => JSON.stringify(e)).join("\n") + "\n",
       ],
@@ -174,6 +186,7 @@ export const sendReceiveThing = async (
   pipelineName: string,
   pipelineSignature: string,
   target: string,
+  method: "POST" | "PUT" | "PATCH",
   headers: { [key: string]: string | number | boolean },
   wrap?: WrapDirective
 ): Promise<Event[]> => {
@@ -181,7 +194,10 @@ export const sendReceiveThing = async (
   const parse = chooseParser(wrap);
   const wrapper = makeWrapper(wrap);
   try {
-    const response = await axiosInstance.post(target, thing, {
+    const response = await axiosInstance.request({
+      url: target,
+      method,
+      data: thing,
       transformRequest: [
         (data) => (typeof data === "string" ? data : JSON.stringify(data)),
       ],

@@ -328,6 +328,7 @@ interface SendHTTPFunctionTemplate {
     | string
     | {
         target: string;
+        method?: "POST" | "PUT" | "PATCH";
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
       };
@@ -342,6 +343,7 @@ const sendHTTPFunctionTemplateSchema = {
           type: "object",
           properties: {
             target: { type: "string", minLength: 1 },
+            method: { enum: ["POST", "PUT", "PATCH"] },
             "jq-expr": { type: "string", minLength: 1 },
             headers: {
               type: "object",
@@ -411,6 +413,7 @@ interface SendReceiveHTTPFunctionTemplate {
     | string
     | {
         target: string;
+        method?: "POST" | "PUT" | "PATCH";
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
         wrap?: WrapDirective;
@@ -426,6 +429,7 @@ const sendReceiveHTTPFunctionTemplateSchema = {
           type: "object",
           properties: {
             target: { type: "string", minLength: 1 },
+            method: { enum: ["POST", "PUT", "PATCH"] },
             "jq-expr": { type: "string", minLength: 1 },
             headers: {
               type: "object",
@@ -631,11 +635,16 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     }
   }
   if ("tail" in input) {
-    // TODO check stuff
+    const { tail } = input as { tail: string | object };
+    // 1.5 Check that the wrap directive is valid, if given.
+    if (typeof tail === "object" && "wrap" in tail) {
+      const { wrap } = tail as { wrap: unknown };
+      validateWrap(wrap, "the input's wrap option");
+    }
   }
   if ("stdin" in input) {
     const { stdin } = input as { stdin: object | null };
-    // 1.5 Check that the wrap directive is valid, if given.
+    // 1.6 Check that the wrap directive is valid, if given.
     if (stdin !== null && "wrap" in stdin) {
       const { wrap } = stdin as { wrap: unknown };
       validateWrap(wrap, "the input's wrap option");

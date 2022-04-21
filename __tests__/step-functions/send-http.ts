@@ -1,15 +1,15 @@
 // Mock the axios instance.
 /* eslint-disable @typescript-eslint/no-unused-vars */
-const mockPost = jest.fn(async (url, data, options) => ({}));
+const mockRequest = jest.fn(async (options) => ({}));
 /* eslint-enable @typescript-eslint/no-unused-vars */
 jest.mock("../../src/io/axios", () => {
   const originalModule = jest.requireActual("../../src/io/axios");
   return {
     ...originalModule,
-    axiosInstance: { post: mockPost },
+    axiosInstance: { request: mockRequest },
   };
 });
-afterEach(() => mockPost.mockClear());
+afterEach(() => mockRequest.mockClear());
 
 import { make as makeEvent } from "../../src/event";
 import { make } from "../../src/step-functions/send-http";
@@ -19,7 +19,8 @@ import { consume } from "../test-utils";
 test("Send-http works as expected", async () => {
   // Arrange
   const target = "http://nothing";
-  const channel = await make("irrelevant", "irrelevant", { target });
+  const method = "PATCH";
+  const channel = await make("irrelevant", "irrelevant", { target, method });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
     await makeEvent("a", "hello", trace),
@@ -33,11 +34,12 @@ test("Send-http works as expected", async () => {
   ]);
   // Assert
   expect(output.map((e) => e.data)).toEqual(["hello", "world"]);
-  expect(mockPost.mock.calls).toHaveLength(1);
-  expect(mockPost.mock.calls[0]).toHaveLength(3);
-  expect(mockPost.mock.calls[0][0]).toEqual(target);
-  expect(mockPost.mock.calls[0][1]).toEqual(events);
-  expect(mockPost.mock.calls[0][2]?.headers).toEqual({
+  expect(mockRequest.mock.calls).toHaveLength(1);
+  expect(mockRequest.mock.calls[0]).toHaveLength(1);
+  expect(mockRequest.mock.calls[0][0].url).toEqual(target);
+  expect(mockRequest.mock.calls[0][0].method).toEqual(method);
+  expect(mockRequest.mock.calls[0][0].data).toEqual(events);
+  expect(mockRequest.mock.calls[0][0].headers).toEqual({
     "Content-Type": "application/x-ndjson",
   });
 });
@@ -45,6 +47,7 @@ test("Send-http works as expected", async () => {
 test("Send-http works when specifying a target plainly", async () => {
   // Arrange
   const target = "http://nothing";
+  const method = "POST";
   const channel = await make("irrelevant", "irrelevant", target);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
@@ -59,11 +62,12 @@ test("Send-http works when specifying a target plainly", async () => {
   ]);
   // Assert
   expect(output.map((e) => e.data)).toEqual(["hello", "world"]);
-  expect(mockPost.mock.calls).toHaveLength(1);
-  expect(mockPost.mock.calls[0]).toHaveLength(3);
-  expect(mockPost.mock.calls[0][0]).toEqual(target);
-  expect(mockPost.mock.calls[0][1]).toEqual(events);
-  expect(mockPost.mock.calls[0][2]?.headers).toEqual({
+  expect(mockRequest.mock.calls).toHaveLength(1);
+  expect(mockRequest.mock.calls[0]).toHaveLength(1);
+  expect(mockRequest.mock.calls[0][0].url).toEqual(target);
+  expect(mockRequest.mock.calls[0][0].method).toEqual(method);
+  expect(mockRequest.mock.calls[0][0].data).toEqual(events);
+  expect(mockRequest.mock.calls[0][0].headers).toEqual({
     "Content-Type": "application/x-ndjson",
   });
 });
@@ -71,8 +75,10 @@ test("Send-http works when specifying a target plainly", async () => {
 test("Send-http works when specifying a jq expression and headers", async () => {
   // Arrange
   const target = "http://nothing";
+  const method = "PUT";
   const channel = await make("irrelevant", "irrelevant", {
     target,
+    method,
     "jq-expr": ".[].d",
     headers: { "Content-Type": "text/plain" },
   });
@@ -89,17 +95,19 @@ test("Send-http works when specifying a jq expression and headers", async () => 
   ]);
   // Assert
   expect(output.map((e) => e.data)).toEqual(["hello", "world"]);
-  expect(mockPost.mock.calls).toHaveLength(2);
-  expect(mockPost.mock.calls[0]).toHaveLength(3);
-  expect(mockPost.mock.calls[0][0]).toEqual(target);
-  expect(mockPost.mock.calls[0][1]).toEqual("hello");
-  expect(mockPost.mock.calls[0][2]?.headers).toEqual({
+  expect(mockRequest.mock.calls).toHaveLength(2);
+  expect(mockRequest.mock.calls[0]).toHaveLength(1);
+  expect(mockRequest.mock.calls[0][0].url).toEqual(target);
+  expect(mockRequest.mock.calls[0][0].method).toEqual(method);
+  expect(mockRequest.mock.calls[0][0].data).toEqual("hello");
+  expect(mockRequest.mock.calls[0][0].headers).toEqual({
     "Content-Type": "text/plain",
   });
-  expect(mockPost.mock.calls[1]).toHaveLength(3);
-  expect(mockPost.mock.calls[1][0]).toEqual(target);
-  expect(mockPost.mock.calls[1][1]).toEqual("world");
-  expect(mockPost.mock.calls[1][2]?.headers).toEqual({
+  expect(mockRequest.mock.calls[1]).toHaveLength(1);
+  expect(mockRequest.mock.calls[1][0].url).toEqual(target);
+  expect(mockRequest.mock.calls[1][0].method).toEqual(method);
+  expect(mockRequest.mock.calls[1][0].data).toEqual("world");
+  expect(mockRequest.mock.calls[1][0].headers).toEqual({
     "Content-Type": "text/plain",
   });
 });

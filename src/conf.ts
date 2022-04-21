@@ -49,6 +49,14 @@ export const DEAD_LETTER_TARGET: string | null =
   process.env.DEAD_LETTER_TARGET ?? null;
 
 /**
+ * An HTTP method to use for the request that forwards dead events.
+ */
+export const DEAD_LETTER_TARGET_METHOD: "POST" | "PUT" | "PATCH" = ((m) =>
+  ["POST", "PUT", "PATCH"].includes(m) ? m : "POST")(
+  process.env.DEAD_LETTER_TARGET_METHOD ?? "POST"
+) as "POST" | "PUT" | "PATCH";
+
+/**
  * A mapping of HTTP headers to use when sending dead events to a
  * remote service.
  */

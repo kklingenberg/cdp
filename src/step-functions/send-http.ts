@@ -22,14 +22,17 @@ export const make = async (
     | string
     | {
         target: string;
+        method?: "POST" | "PUT" | "PATCH";
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
       }
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
+  const method =
+    typeof options === "string" ? "POST" : options.method ?? "POST";
   const headers = typeof options === "string" ? {} : options.headers ?? {};
   let forwarder: (events: Event[]) => void = (events: Event[]) =>
-    sendEvents(events, target, headers);
+    sendEvents(events, target, method, headers);
   let closeExternal: () => Promise<void> = async () => {
     // Empty function
   };
@@ -45,7 +48,7 @@ export const make = async (
         // Note: the response is not awaited for. This sends requests
         // in parallel for as much parallelism as is supported by the
         // runtime.
-        sendThing(response, target, headers);
+        sendThing(response, target, method, headers);
       }
     })();
   }

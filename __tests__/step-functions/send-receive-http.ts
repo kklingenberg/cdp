@@ -1,7 +1,7 @@
 import { Readable } from "stream";
 // Mock the axios instance.
 /* eslint-disable @typescript-eslint/no-unused-vars */
-const mockPost = jest.fn(async (url, data, options) => ({
+const mockRequest = jest.fn(async (options) => ({
   data: Readable.from(['{"n":"n","d":{"lorem":"ipsum"}}']), // Less than 32 bytes, crucially.
 }));
 /* eslint-enable @typescript-eslint/no-unused-vars */
@@ -9,10 +9,10 @@ jest.mock("../../src/io/axios", () => {
   const originalModule = jest.requireActual("../../src/io/axios");
   return {
     ...originalModule,
-    axiosInstance: { post: mockPost },
+    axiosInstance: { request: mockRequest },
   };
 });
-afterEach(() => mockPost.mockClear());
+afterEach(() => mockRequest.mockClear());
 
 import { make as makeEvent } from "../../src/event";
 import { make } from "../../src/step-functions/send-receive-http";
@@ -22,6 +22,7 @@ import { consume } from "../test-utils";
 test("Send-receive-http works as expected", async () => {
   // Arrange
   const target = "http://nothing";
+  const method = "POST";
   const channel = await make("irrelevant", "irrelevant", target);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
@@ -37,11 +38,12 @@ test("Send-receive-http works as expected", async () => {
   // Assert
   expect(output.map((e) => e.name)).toEqual(["n"]);
   expect(output.map((e) => e.data)).toEqual([{ lorem: "ipsum" }]);
-  expect(mockPost.mock.calls).toHaveLength(1);
-  expect(mockPost.mock.calls[0]).toHaveLength(3);
-  expect(mockPost.mock.calls[0][0]).toEqual(target);
-  expect(mockPost.mock.calls[0][1]).toEqual(events);
-  expect(mockPost.mock.calls[0][2]?.headers).toEqual({
+  expect(mockRequest.mock.calls).toHaveLength(1);
+  expect(mockRequest.mock.calls[0]).toHaveLength(1);
+  expect(mockRequest.mock.calls[0][0].url).toEqual(target);
+  expect(mockRequest.mock.calls[0][0].method).toEqual(method);
+  expect(mockRequest.mock.calls[0][0].data).toEqual(events);
+  expect(mockRequest.mock.calls[0][0].headers).toEqual({
     "Content-Type": "application/x-ndjson",
   });
 });
@@ -49,8 +51,10 @@ test("Send-receive-http works as expected", async () => {
 test("Send-receive-http works when using jq as intermediary", async () => {
   // Arrange
   const target = "http://nothing";
+  const method = "PATCH";
   const channel = await make("irrelevant", "irrelevant", {
     target,
+    method,
     "jq-expr": `[.[] | . * {n: "changed"}]`,
     headers: { "Content-Type": "application/json" },
     wrap: "result",
@@ -71,13 +75,14 @@ test("Send-receive-http works when using jq as intermediary", async () => {
   expect(output.map((e) => e.data)).toEqual([
     { n: "n", d: { lorem: "ipsum" } },
   ]);
-  expect(mockPost.mock.calls).toHaveLength(1);
-  expect(mockPost.mock.calls[0]).toHaveLength(3);
-  expect(mockPost.mock.calls[0][0]).toEqual(target);
-  expect(mockPost.mock.calls[0][1]).toEqual(
+  expect(mockRequest.mock.calls).toHaveLength(1);
+  expect(mockRequest.mock.calls[0]).toHaveLength(1);
+  expect(mockRequest.mock.calls[0][0].url).toEqual(target);
+  expect(mockRequest.mock.calls[0][0].method).toEqual(method);
+  expect(mockRequest.mock.calls[0][0].data).toEqual(
     events.map((e) => e.toJSON()).map((e) => ({ ...e, n: "changed" }))
   );
-  expect(mockPost.mock.calls[0][2]?.headers).toEqual({
+  expect(mockRequest.mock.calls[0][0].headers).toEqual({
     "Content-Type": "application/json",
   });
 });
