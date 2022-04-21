@@ -172,6 +172,10 @@ events that wrap the input data.
 **`input.stdin.wrap.raw`** optional **boolean**, whether to treat
 incoming data as plain text, not JSON.
 
+#### `tail`
+
+TODO write about tail.
+
 #### `http`
 
 **`input.http`** **object** or **string**, the input form that makes a

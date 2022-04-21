@@ -6,7 +6,12 @@ import {
   wrapDirectiveSchema,
   validateWrap,
 } from "./event";
-import { makeSTDINInput, makeHTTPInput, makePollInput } from "./input";
+import {
+  makeSTDINInput,
+  makeTailInput,
+  makeHTTPInput,
+  makePollInput,
+} from "./input";
 import { isHealthy } from "./io/jq";
 import {
   pipelineEvents,
@@ -60,6 +65,37 @@ const stdinInputTemplateSchema = {
   },
   additionalProperties: false,
   required: ["stdin"],
+};
+
+/**
+ * The `tail` input form ingests events from a file.
+ */
+interface TailInputTemplate {
+  tail:
+    | string
+    | { path: string; startAt?: "start" | "end"; wrap?: WrapDirective };
+}
+const tailInputTemplateSchema = {
+  type: "object",
+  properties: {
+    tail: {
+      anyOf: [
+        { type: "string", minLength: 1 },
+        {
+          type: "object",
+          properties: {
+            path: { type: "string", minLength: 1 },
+            startAt: { enum: ["start", "end"] },
+            wrap: wrapDirectiveSchema,
+          },
+          additionalProperties: false,
+          required: ["path"],
+        },
+      ],
+    },
+  },
+  additionalProperties: false,
+  required: ["tail"],
 };
 
 /**
@@ -420,7 +456,11 @@ const sendReceiveHTTPFunctionTemplateSchema = {
  */
 interface PipelineTemplate {
   name: string;
-  input: STDINInputTemplate | HTTPInputTemplate | PollInputTemplate;
+  input:
+    | STDINInputTemplate
+    | TailInputTemplate
+    | HTTPInputTemplate
+    | PollInputTemplate;
   steps?: {
     [key: string]: {
       after?: string[];
@@ -458,6 +498,7 @@ const pipelineTemplateSchema = {
     input: {
       anyOf: [
         stdinInputTemplateSchema,
+        tailInputTemplateSchema,
         httpInputTemplateSchema,
         pollInputTemplateSchema,
       ],
@@ -588,6 +629,9 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
       const { wrap } = http as { wrap: unknown };
       validateWrap(wrap, "the input's wrap option");
     }
+  }
+  if ("tail" in input) {
+    // TODO check stuff
   }
   if ("stdin" in input) {
     const { stdin } = input as { stdin: object | null };
@@ -762,6 +806,13 @@ export const runPipeline = async (
         template.name,
         signature,
         (template.input as HTTPInputTemplate).http
+      );
+      break;
+    case "tail":
+      [inputChannel, inputEnded] = makeTailInput(
+        template.name,
+        signature,
+        (template.input as TailInputTemplate).tail
       );
       break;
     case "stdin":
