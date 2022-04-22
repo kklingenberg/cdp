@@ -1,4 +1,8 @@
-import { DEAD_LETTER_TARGET, DEAD_LETTER_TARGET_HEADERS } from "./conf";
+import {
+  DEAD_LETTER_TARGET,
+  DEAD_LETTER_TARGET_METHOD,
+  DEAD_LETTER_TARGET_HEADERS,
+} from "./conf";
 import { Event } from "./event";
 import { sendEvents } from "./io/http-client";
 import { makeLogger } from "./utils";
@@ -21,6 +25,7 @@ export const handler = async (events: Event[]): Promise<void> => {
     await sendEvents(
       events,
       DEAD_LETTER_TARGET as string,
+      DEAD_LETTER_TARGET_METHOD,
       DEAD_LETTER_TARGET_HEADERS
     );
   }

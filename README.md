@@ -172,6 +172,32 @@ events that wrap the input data.
 **`input.stdin.wrap.raw`** optional **boolean**, whether to treat
 incoming data as plain text, not JSON.
 
+#### `tail`
+
+**`input.tail`** **string** or **object**, the input form that makes a
+pipeline read source data from (the tail of) a file. If given a
+string, it will be interpreted as the path to the file to be read.
+
+**`input.tail.path`** required **string**, the path to the file to be
+read.
+
+**`input.tail.startAt`** optional **"start"** or **"end"**, a mode
+indicating whether the file should first be read from the beginning or
+the end. To prevent event duplication after a restart of CDP, this is
+set to **"end"** by default. Note: this doesn't alter the direction of
+reading (which is always "forward"), only the point in the target file
+where reading should begin.
+
+**`input.tail.wrap`** optional **string** or **object**, a wrapping
+directive which specifies that incoming data is not encoded events,
+and thus should be wrapped.
+
+**`input.tail.wrap.name`** required **string**, the name given to the
+events that wrap the input data.
+
+**`input.tail.wrap.raw`** optional **boolean**, whether to treat
+incoming data as plain text, not JSON.
+
 #### `http`
 
 **`input.http`** **object** or **string**, the input form that makes a
@@ -468,6 +494,10 @@ value is taken to be target URI to use for the event-sending request.
 **`steps.<name>.(reduce|flatmap).send-http.target`** required
 **string**, the target URI to use for the event-sending request.
 
+**`steps.<name>.(reduce|flatmap).send-http.method`** optional
+**"POST"** or **"PUT"** or **"PATCH"**, the HTTP method to use for the
+event-sending request. Defaults to **"POST"**.
+
 **`steps.<name>.(reduce|flatmap).send-http.jq-expr`** optional
 **string**, an optional `jq` filter to apply to events before creating
 the request. If this option is used, each distinct value produced by
@@ -513,6 +543,10 @@ the next steps in the pipeline.
 **`steps.<name>.(reduce|flatmap).send-receive-http.target`** required
 **string**, the target URI to use for the event-sending request.
 
+**`steps.<name>.(reduce|flatmap).send-receive-http.method`** optional
+**"POST"** or **"PUT"** or **"PATCH"**, the HTTP method to use for the
+event-sending request. Defaults to **"POST"**.
+
 **`steps.<name>.(reduce|flatmap).send-receive-http.jq-expr`** optional
 **string**, an optional `jq` filter to apply to events before creating
 the request. If this option is used, each distinct value produced by
@@ -546,6 +580,12 @@ Several step processing functions have the option of using
 format of events ahead of time, and can also be used to communicate in
 plain text formats (i.e. non-JSON). To do that, simply return string
 values from your `jq` filters.
+
+**Note**: CDP tries to protect the adjacent `jq` processes by wrapping
+all filters with a
+[`try`](https://stedolan.github.io/jq/manual/#try-catch) form. Runtime
+errors will thus be silently skipped over, so it can be very important
+to always test your `jq` filters in controlled environments.
 
 ### Metrics
 

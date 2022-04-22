@@ -49,6 +49,14 @@ export const DEAD_LETTER_TARGET: string | null =
   process.env.DEAD_LETTER_TARGET ?? null;
 
 /**
+ * An HTTP method to use for the request that forwards dead events.
+ */
+export const DEAD_LETTER_TARGET_METHOD: "POST" | "PUT" | "PATCH" = ((m) =>
+  ["POST", "PUT", "PATCH"].includes(m) ? m : "POST")(
+  process.env.DEAD_LETTER_TARGET_METHOD ?? "POST"
+) as "POST" | "PUT" | "PATCH";
+
+/**
  * A mapping of HTTP headers to use when sending dead events to a
  * remote service.
  */
@@ -120,6 +128,13 @@ export const METRICS_NAME_PREFIX: string =
 export const HTTP_CLIENT_TIMEOUT: number = parseInt(
   process.env.HTTP_CLIENT_TIMEOUT ?? "60000",
   10
+);
+
+/**
+ * Whether to reject invalid TLS certificates. Defaults to `true`.
+ */
+export const HTTP_CLIENT_REJECT_UNAUTHORIZED = !["false", "no", "0"].includes(
+  (process.env.HTTP_CLIENT_REJECT_UNAUTHORIZED ?? "yes").toLowerCase()
 );
 
 /**

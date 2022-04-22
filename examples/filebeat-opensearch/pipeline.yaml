@@ -1,0 +1,28 @@
+---
+name: "Logs to OpenSearch"
+
+input:
+  tail:
+    path: /var/log/shared-logs/access.log
+    wrap:
+      name: nginx
+      raw: true
+
+steps:
+
+  send to opensearch:
+    window:
+      events: 1000
+      seconds: 10
+    reduce:
+      send-http:
+        target: https://opensearch:9200/events/_bulk
+        headers:
+          Content-Type: application/x-ndjson
+          Authorization: Basic YWRtaW46YWRtaW4=
+        # Here the jq JSON-serializing function `tojson` is used, so
+        # that it's possible to assemble a single NDJson request body
+        # that complies with OpenSearch's specification:
+        # https://opensearch.org/docs/latest/opensearch/rest-api/document-apis/bulk/
+        jq-expr: |-
+          map([{index: {}}, .] | map(tojson) | join("\n")) | join("\n") + "\n"

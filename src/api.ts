@@ -6,7 +6,12 @@ import {
   wrapDirectiveSchema,
   validateWrap,
 } from "./event";
-import { makeSTDINInput, makeHTTPInput, makePollInput } from "./input";
+import {
+  makeSTDINInput,
+  makeTailInput,
+  makeHTTPInput,
+  makePollInput,
+} from "./input";
 import { isHealthy } from "./io/jq";
 import {
   pipelineEvents,
@@ -60,6 +65,37 @@ const stdinInputTemplateSchema = {
   },
   additionalProperties: false,
   required: ["stdin"],
+};
+
+/**
+ * The `tail` input form ingests events from a file.
+ */
+interface TailInputTemplate {
+  tail:
+    | string
+    | { path: string; startAt?: "start" | "end"; wrap?: WrapDirective };
+}
+const tailInputTemplateSchema = {
+  type: "object",
+  properties: {
+    tail: {
+      anyOf: [
+        { type: "string", minLength: 1 },
+        {
+          type: "object",
+          properties: {
+            path: { type: "string", minLength: 1 },
+            startAt: { enum: ["start", "end"] },
+            wrap: wrapDirectiveSchema,
+          },
+          additionalProperties: false,
+          required: ["path"],
+        },
+      ],
+    },
+  },
+  additionalProperties: false,
+  required: ["tail"],
 };
 
 /**
@@ -292,6 +328,7 @@ interface SendHTTPFunctionTemplate {
     | string
     | {
         target: string;
+        method?: "POST" | "PUT" | "PATCH";
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
       };
@@ -306,6 +343,7 @@ const sendHTTPFunctionTemplateSchema = {
           type: "object",
           properties: {
             target: { type: "string", minLength: 1 },
+            method: { enum: ["POST", "PUT", "PATCH"] },
             "jq-expr": { type: "string", minLength: 1 },
             headers: {
               type: "object",
@@ -375,6 +413,7 @@ interface SendReceiveHTTPFunctionTemplate {
     | string
     | {
         target: string;
+        method?: "POST" | "PUT" | "PATCH";
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
         wrap?: WrapDirective;
@@ -390,6 +429,7 @@ const sendReceiveHTTPFunctionTemplateSchema = {
           type: "object",
           properties: {
             target: { type: "string", minLength: 1 },
+            method: { enum: ["POST", "PUT", "PATCH"] },
             "jq-expr": { type: "string", minLength: 1 },
             headers: {
               type: "object",
@@ -420,7 +460,11 @@ const sendReceiveHTTPFunctionTemplateSchema = {
  */
 interface PipelineTemplate {
   name: string;
-  input: STDINInputTemplate | HTTPInputTemplate | PollInputTemplate;
+  input:
+    | STDINInputTemplate
+    | TailInputTemplate
+    | HTTPInputTemplate
+    | PollInputTemplate;
   steps?: {
     [key: string]: {
       after?: string[];
@@ -458,6 +502,7 @@ const pipelineTemplateSchema = {
     input: {
       anyOf: [
         stdinInputTemplateSchema,
+        tailInputTemplateSchema,
         httpInputTemplateSchema,
         pollInputTemplateSchema,
       ],
@@ -589,9 +634,17 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
       validateWrap(wrap, "the input's wrap option");
     }
   }
+  if ("tail" in input) {
+    const { tail } = input as { tail: string | object };
+    // 1.5 Check that the wrap directive is valid, if given.
+    if (typeof tail === "object" && "wrap" in tail) {
+      const { wrap } = tail as { wrap: unknown };
+      validateWrap(wrap, "the input's wrap option");
+    }
+  }
   if ("stdin" in input) {
     const { stdin } = input as { stdin: object | null };
-    // 1.5 Check that the wrap directive is valid, if given.
+    // 1.6 Check that the wrap directive is valid, if given.
     if (stdin !== null && "wrap" in stdin) {
       const { wrap } = stdin as { wrap: unknown };
       validateWrap(wrap, "the input's wrap option");
@@ -762,6 +815,13 @@ export const runPipeline = async (
         template.name,
         signature,
         (template.input as HTTPInputTemplate).http
+      );
+      break;
+    case "tail":
+      [inputChannel, inputEnded] = makeTailInput(
+        template.name,
+        signature,
+        (template.input as TailInputTemplate).tail
       );
       break;
     case "stdin":
