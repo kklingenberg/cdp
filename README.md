@@ -483,6 +483,21 @@ vectors it receives, unmodified. It also prints the events to STDOUT.
 **string**, specifies a `jq` filter to apply before sending events to
 STDOUT.
 
+#### `send-file`
+
+**`steps.<name>.(reduce|flatmap).send-file`** **object** or
+**string**, a function that always sends forward the events in the
+vectors it receives, unmodified. It also appends the events to the
+specified file, which is given directly as a path or a configuration
+object.
+
+**`steps.<name>.(reduce|flatmap).send-file.path`** required
+**string**, the path to the file that will receive events.
+
+**`steps.<name>.(reduce|flatmap).send-file.jq-expr`** optional
+**string**, specifies a `jq` filter to apply before appending events
+to the specified file.
+
 #### `send-http`
 
 **`steps.<name>.(reduce|flatmap).send-http`** **string** or

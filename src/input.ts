@@ -94,7 +94,7 @@ export const makeTailInput = (
   pipelineSignature: string,
   options:
     | string
-    | { path: string; startAt?: "start" | "end"; wrap?: WrapDirective }
+    | { path: string; ["start-at"]?: "start" | "end"; wrap?: WrapDirective }
 ): [Channel<never, Event>, Promise<void>] => {
   const parse = chooseParser(
     (typeof options === "string" ? {} : options)?.wrap
@@ -104,7 +104,7 @@ export const makeTailInput = (
   );
   const path = typeof options === "string" ? options : options.path;
   const startPos =
-    typeof options === "string" ? "end" : options.startAt ?? "end";
+    typeof options === "string" ? "end" : options["start-at"] ?? "end";
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const queue = new AsyncQueue<unknown>();
   // Wrap the queue's channel to make it look like an input channel.

@@ -34,6 +34,7 @@ import { make as makeRenameFunction } from "./step-functions/rename";
 import { make as makeSendHTTPFunction } from "./step-functions/send-http";
 import { make as makeSendReceiveHTTPFunction } from "./step-functions/send-receive-http";
 import { make as makeSendReceiveJqFunction } from "./step-functions/send-receive-jq";
+import { make as makeSendFileFunction } from "./step-functions/send-file";
 import { make as makeSendSTDOUTFunction } from "./step-functions/send-stdout";
 import { ajv, getSignature, makeLogger, resolveAfter } from "./utils";
 
@@ -73,7 +74,7 @@ const stdinInputTemplateSchema = {
 interface TailInputTemplate {
   tail:
     | string
-    | { path: string; startAt?: "start" | "end"; wrap?: WrapDirective };
+    | { path: string; ["start-at"]?: "start" | "end"; wrap?: WrapDirective };
 }
 const tailInputTemplateSchema = {
   type: "object",
@@ -85,7 +86,7 @@ const tailInputTemplateSchema = {
           type: "object",
           properties: {
             path: { type: "string", minLength: 1 },
-            startAt: { enum: ["start", "end"] },
+            "start-at": { enum: ["start", "end"] },
             wrap: wrapDirectiveSchema,
           },
           additionalProperties: false,
@@ -319,6 +320,41 @@ const sendSTDOUTFunctionTemplateSchema = {
 };
 
 /**
+ * A `send-file` function appends events as serialized JSON to the
+ * specified file, and forwards the received events as-is to the rest
+ * of the pipeline.
+ */
+interface SendFileFunctionTemplate {
+  ["send-file"]:
+    | string
+    | {
+        path: string;
+        ["jq-expr"]?: string;
+      };
+}
+const sendFileFunctionTemplateSchema = {
+  type: "object",
+  properties: {
+    "send-file": {
+      anyOf: [
+        { type: "string", minLength: 1 },
+        {
+          type: "object",
+          properties: {
+            path: { type: "string", minLength: 1 },
+            "jq-expr": { type: "string", minLength: 1 },
+          },
+          additionalProperties: false,
+          required: ["path"],
+        },
+      ],
+    },
+  },
+  additionalProperties: false,
+  required: ["send-file"],
+};
+
+/**
  * A `send-http` function emits event batches to a remote HTTP
  * endpoint, ignores the response entirely and forwards the original
  * events to the rest of the pipeline.
@@ -480,6 +516,7 @@ interface PipelineTemplate {
         | KeepFunctionTemplate
         | KeepWhenFunctionTemplate
         | SendSTDOUTFunctionTemplate
+        | SendFileFunctionTemplate
         | SendHTTPFunctionTemplate
         | SendReceiveJqFunctionTemplate
         | SendReceiveHTTPFunctionTemplate;
@@ -489,6 +526,7 @@ interface PipelineTemplate {
         | KeepFunctionTemplate
         | KeepWhenFunctionTemplate
         | SendSTDOUTFunctionTemplate
+        | SendFileFunctionTemplate
         | SendHTTPFunctionTemplate
         | SendReceiveJqFunctionTemplate
         | SendReceiveHTTPFunctionTemplate;
@@ -542,6 +580,7 @@ const pipelineTemplateSchema = {
               keepFunctionTemplateSchema,
               keepWhenFunctionTemplateSchema,
               sendSTDOUTFunctionTemplateSchema,
+              sendFileFunctionTemplateSchema,
               sendHTTPFunctionTemplateSchema,
               sendReceiveJqFunctionTemplateSchema,
               sendReceiveHTTPFunctionTemplateSchema,
@@ -554,6 +593,7 @@ const pipelineTemplateSchema = {
               keepFunctionTemplateSchema,
               keepWhenFunctionTemplateSchema,
               sendSTDOUTFunctionTemplateSchema,
+              sendFileFunctionTemplateSchema,
               sendHTTPFunctionTemplateSchema,
               sendReceiveJqFunctionTemplateSchema,
               sendReceiveHTTPFunctionTemplateSchema,
@@ -889,6 +929,13 @@ export const runPipeline = async (
           template.name,
           signature,
           (definition[functionMode] as SendHTTPFunctionTemplate)["send-http"]
+        );
+        break;
+      case "send-file":
+        fn = await makeSendFileFunction(
+          template.name,
+          signature,
+          (definition[functionMode] as SendFileFunctionTemplate)["send-file"]
         );
         break;
       case "send-stdout":
