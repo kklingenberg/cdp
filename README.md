@@ -181,7 +181,7 @@ string, it will be interpreted as the path to the file to be read.
 **`input.tail.path`** required **string**, the path to the file to be
 read.
 
-**`input.tail.startAt`** optional **"start"** or **"end"**, a mode
+**`input.tail.start-at`** optional **"start"** or **"end"**, a mode
 indicating whether the file should first be read from the beginning or
 the end. To prevent event duplication after a restart of CDP, this is
 set to **"end"** by default. Note: this doesn't alter the direction of
@@ -482,6 +482,21 @@ vectors it receives, unmodified. It also prints the events to STDOUT.
 **`steps.<name>.(reduce|flatmap).send-stdout.jq-expr`** optional
 **string**, specifies a `jq` filter to apply before sending events to
 STDOUT.
+
+#### `send-file`
+
+**`steps.<name>.(reduce|flatmap).send-file`** **object** or
+**string**, a function that always sends forward the events in the
+vectors it receives, unmodified. It also appends the events to the
+specified file, which is given directly as a path or a configuration
+object.
+
+**`steps.<name>.(reduce|flatmap).send-file.path`** required
+**string**, the path to the file that will receive events.
+
+**`steps.<name>.(reduce|flatmap).send-file.jq-expr`** optional
+**string**, specifies a `jq` filter to apply before appending events
+to the specified file.
 
 #### `send-http`
 

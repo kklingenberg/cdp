@@ -1,0 +1,31 @@
+x-cdp: &cdp
+  build:
+    context: ../..
+  image: cdp:dev
+  volumes:
+    - .:/app
+    - bridge:/shared
+
+version: "3.8"
+
+services:
+  initial:
+    <<: *cdp
+    command: ["-e", "/app/pipeline-initial.yaml"]
+    ports:
+      - 8000:8000
+    depends_on:
+      - middle
+
+  middle:
+    <<: *cdp
+    command: ["-e", "/app/pipeline-middle.yaml"]
+    depends_on:
+      - terminal
+
+  terminal:
+    <<: *cdp
+    command: ["-e", "/app/pipeline-terminal.yaml"]
+
+volumes:
+  bridge:

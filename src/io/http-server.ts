@@ -47,7 +47,7 @@ export const makeHTTPServer = (
     .use(async (ctx) => {
       logger.debug("Received request:", ctx.request.method, ctx.request.path);
       if (ctx.request.method === "POST" && ctx.request.path === endpoint) {
-        logger.info("Received events payload:", ctx.request.length, "bytes");
+        logger.debug("Received events payload:", ctx.request.length, "bytes");
         await handler(ctx);
         ctx.body = null;
       } else if (

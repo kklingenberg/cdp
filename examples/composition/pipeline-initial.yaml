@@ -1,0 +1,23 @@
+---
+name: "initial"
+input:
+  http: /events
+
+steps:
+  debug:
+    flatmap:
+      send-stdout:
+        jq-expr: |-
+          [
+            .[].n, ": ",
+            (.[].d | if . == null then "<nothing>" else . end),
+            " (",
+            (.[].t | map(.p) | join(" --> ")),
+            ")"
+          ] | join("")
+
+  forward:
+    after:
+      - debug
+    flatmap:
+      send-file: /shared/events
