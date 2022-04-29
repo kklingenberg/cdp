@@ -1,3 +1,4 @@
+import { openSync as openFile, closeSync as closeFile } from "fs";
 import { Readable } from "stream";
 import Tail = require("tail-file");
 import { Channel, AsyncQueue } from "./async-queue";
@@ -113,6 +114,9 @@ export const makeTailInput = (
     notifyDrained = resolve;
   });
   const channel = queue.asChannel();
+  // Ensure the file exists.
+  const fd = openFile(path, "a");
+  closeFile(fd);
   // Tail the target file.
   const tail = new Tail(path, { startPos, sep: /\r?\n/ });
   const close = async () => {

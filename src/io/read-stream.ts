@@ -113,7 +113,7 @@ export const mapParse = <T>(
       chunks.push(remainder);
     }
     if (readLimit !== null && totalRead >= readLimit) {
-      logger.info("Parsed stream achieved limit", readLimit);
+      logger.debug("Parsed stream achieved limit", readLimit);
       done = true;
       stream.emit("end");
     }

@@ -181,7 +181,7 @@ string, it will be interpreted as the path to the file to be read.
 **`input.tail.path`** required **string**, the path to the file to be
 read.
 
-**`input.tail.startAt`** optional **"start"** or **"end"**, a mode
+**`input.tail.start-at`** optional **"start"** or **"end"**, a mode
 indicating whether the file should first be read from the beginning or
 the end. To prevent event duplication after a restart of CDP, this is
 set to **"end"** by default. Note: this doesn't alter the direction of

@@ -21,7 +21,7 @@ beforeEach((done) => {
 
 afterEach((done) => {
   if (fixtures.directory !== null) {
-    rm(fixtures.directory, { recursive: true }, (err) => done());
+    rm(fixtures.directory, { recursive: true }, () => done());
   } else {
     done();
   }
