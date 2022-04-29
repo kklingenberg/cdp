@@ -114,9 +114,13 @@ export const makeTailInput = (
     notifyDrained = resolve;
   });
   const channel = queue.asChannel();
-  // Ensure the file exists.
-  const fd = openFile(path, "a");
-  closeFile(fd);
+  // Reduce the chance of the file not existing before tailing.
+  try {
+    const fd = openFile(path, "a");
+    closeFile(fd);
+  } catch (err) {
+    logger.warn("Failed to touch file", path);
+  }
   // Tail the target file.
   const tail = new Tail(path, { startPos, sep: /\r?\n/ });
   const close = async () => {
