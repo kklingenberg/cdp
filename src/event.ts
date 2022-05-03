@@ -1,6 +1,6 @@
 import { Readable } from "stream";
 import { Channel, flatMap } from "./async-queue";
-import { ajv, getSignature, makeLogger } from "./utils";
+import { ajv, makeLogger } from "./utils";
 import { isValidEventName } from "./pattern";
 import { parseLines, parseJson } from "./io/read-stream";
 
@@ -62,6 +62,17 @@ const serializedEventSchema = {
 const validateSerializedEvent = ajv.compile(serializedEventSchema);
 
 /**
+ * Generate a construction counter value for this event.
+ */
+const nextCounter: () => number = (() => {
+  let currentValue = 0;
+  return () => {
+    currentValue = (currentValue + 1) % Number.MAX_SAFE_INTEGER;
+    return currentValue;
+  };
+})();
+
+/**
  * An event is the smallest unit of data processable in CDP. It's a
  * wrapper around a variant-typed data packet.
  */
@@ -89,23 +100,22 @@ export class Event {
   timestamp: number;
 
   /**
-   * A weak event's identity, with high chances of being unique in
-   * small pools of events of similar ages, within a single pipeline.
+   * A weak event's identity.
    */
-  signature: string;
+  id: number;
 
   constructor(
     name: string,
     data: unknown,
     trace: TracePoint[],
     timestamp: number,
-    signature: string
+    id?: number
   ) {
     this.name = name;
     this.data = data;
     this.trace = trace;
     this.timestamp = timestamp;
-    this.signature = signature;
+    this.id = id ?? nextCounter();
   }
 
   toJSON(): SerializedEvent {
@@ -117,7 +127,7 @@ export class Event {
   }
 
   toString(): string {
-    return `Event<${this.signature}>`;
+    return `Event#${this.id}`;
   }
 }
 
@@ -136,8 +146,7 @@ export const make = async (
   trace: TracePoint[]
 ): Promise<Event> => {
   const timestamp = trace[trace.length - 1].i;
-  const signature = await getSignature(name, data, trace);
-  return new Event(name, data, trace, timestamp, signature);
+  return new Event(name, data, trace, timestamp);
 };
 
 /**

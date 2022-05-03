@@ -11,7 +11,7 @@ import {
  * The axios instance used to emit all http requests.
  */
 export const axiosInstance = axios.create({
-  timeout: HTTP_CLIENT_TIMEOUT,
+  timeout: HTTP_CLIENT_TIMEOUT * 1000,
   httpAgent: new HttpAgent(),
   httpsAgent: new HttpsAgent({
     rejectUnauthorized: HTTP_CLIENT_REJECT_UNAUTHORIZED,

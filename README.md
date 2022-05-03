@@ -460,6 +460,22 @@ combination of the `append` and `prepend` options.
 **`steps.<name>.(reduce|flatmap).deduplicate`** **object** or
 **null**, a function that removes duplicate events from vectors.
 
+**`steps.<name>.(reduce|flatmap).deduplicate.consider-name`** optional
+**boolean**, defaults to `true`, indicates whether deduplication
+should consider the name of events.
+
+**`steps.<name>.(reduce|flatmap).deduplicate.consider-data`** optional
+**boolean**, defaults to `true`, indicates whether deduplication
+should consider the data contained in events.
+
+**`steps.<name>.(reduce|flatmap).deduplicate.consider-trace`**
+optional **boolean**, defaults to `false`, indicates whether
+deduplication should consider the trace of events.
+
+Setting all three of these to `false` is equivalent to using the
+below-explained `keep` with value `1`, that is, dropping all events
+from each group except for the first one.
+
 #### `keep`
 
 **`steps.<name>.(reduce|flatmap).keep`** **number** or **string**, a

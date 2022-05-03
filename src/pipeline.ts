@@ -162,7 +162,7 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
       // Send the event to the bus queue.
       return events.forEach((event) => {
         if (!busQueue.push([index, event])) {
-          logger.debug("Couldn't catch event", event.signature, "in bus queue");
+          logger.debug("Couldn't catch event", event.id, "in bus queue");
           deadEvents.push(event);
           deadEventsMetric.set(deadEvents.length);
         }
@@ -182,7 +182,7 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
       const nextNodeIndices = edges.get(sourceNodeIndex) ?? [];
       logger.debug(
         "Got event",
-        event.signature,
+        event.id,
         "from the bus queue, emitted from node:",
         sourceNodeIndex,
         "; next nodes are:",
@@ -202,7 +202,7 @@ export const run = async (pipeline: Pipeline): Promise<Step> => {
       if (!sent) {
         logger.debug(
           "Couldn't forward event",
-          event.signature,
+          event.id,
           "to at least one node in",
           nextNodeIndices
         );
