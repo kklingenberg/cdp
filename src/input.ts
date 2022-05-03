@@ -2,7 +2,11 @@ import { openSync as openFile, closeSync as closeFile } from "fs";
 import { Readable } from "stream";
 import Tail = require("tail-file");
 import { Channel, AsyncQueue, flatMap } from "./async-queue";
-import { HTTP_SERVER_DEFAULT_PORT, POLL_INPUT_DEFAULT_INTERVAL } from "./conf";
+import {
+  HTTP_SERVER_DEFAULT_PORT,
+  HTTP_SERVER_HEALTH_ENDPOINT,
+  POLL_INPUT_DEFAULT_INTERVAL,
+} from "./conf";
 import {
   Event,
   arrivalTimestamp,
@@ -14,6 +18,7 @@ import {
 } from "./event";
 import { axiosInstance } from "./io/axios";
 import { makeHTTPServer } from "./io/http-server";
+import { isHealthy } from "./io/jq";
 import { makeLogger } from "./utils";
 
 /**
@@ -250,10 +255,34 @@ export const makeHTTPInput = (
   const port = typeof rawPort === "string" ? parseInt(rawPort) : rawPort;
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const queue = new AsyncQueue<unknown>();
-  const server = makeHTTPServer(endpoint, port, async (ctx) => {
-    arrivalTimestamp.update();
-    for await (const thing of parse(ctx.req, ctx.request.length)) {
-      queue.push(wrapper(thing));
+  const server = makeHTTPServer(port, async (ctx) => {
+    logger.debug("Received request:", ctx.request.method, ctx.request.path);
+    if (ctx.request.method === "POST" && ctx.request.path === endpoint) {
+      logger.debug("Received events payload:", ctx.request.length, "bytes");
+      arrivalTimestamp.update();
+      for await (const thing of parse(ctx.req, ctx.request.length)) {
+        queue.push(wrapper(thing));
+      }
+      ctx.body = null;
+    } else if (
+      ctx.request.method === "GET" &&
+      ctx.request.path === HTTP_SERVER_HEALTH_ENDPOINT
+    ) {
+      ctx.type = "application/health+json";
+      if (isHealthy()) {
+        ctx.body = JSON.stringify({ status: "pass" });
+      } else {
+        logger.warn("Notified unhealthy status");
+        ctx.body = JSON.stringify({ status: "fail" });
+        ctx.status = 500;
+      }
+    } else {
+      logger.info(
+        "Received unrecognized request:",
+        ctx.request.method,
+        ctx.request.path
+      );
+      ctx.status = 404;
     }
   });
   const channel = queue.asChannel();

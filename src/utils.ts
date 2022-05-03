@@ -24,7 +24,7 @@ export const getSignature = (...args: unknown[]): Promise<string> =>
     hash.on("readable", () => {
       const data = hash.read();
       if (data) {
-        resolve(data.toString("hex"));
+        resolve(data.toString("base64url"));
       } else {
         reject(new Error("sha1 hash object didn't produce a digest"));
       }
@@ -33,7 +33,8 @@ export const getSignature = (...args: unknown[]): Promise<string> =>
     try {
       args
         .filter((arg) => typeof arg !== "undefined")
-        .forEach((arg) => hash.write(JSON.stringify(arg)));
+        .map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg)))
+        .forEach((arg) => hash.write(arg));
     } catch (err) {
       reject(err);
     } finally {
