@@ -23,6 +23,47 @@ export const activeQueues: Set<AsyncQueue<any>> = new Set();
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
+ * An alternative to plain arrays as queues, with better shift()
+ * performance. Credit to: https://github.com/sanori/queue-js
+ *
+ * queue-js is licensed under Apache-2.0:
+ * https://github.com/sanori/queue-js/blob/main/LICENSE
+ */
+export class Queue<Type> {
+  /**
+   * The data in the queue, held in two stacks.
+   */
+  stackForward: Type[] = [];
+  stackBackward: Type[] = [];
+
+  /**
+   * Push a single value to the end of the queue.
+   */
+  push(value: Type): void {
+    this.stackForward.push(value);
+  }
+
+  /**
+   * Get a value from the begging of the queue.
+   */
+  shift(): Type | undefined {
+    if (this.stackBackward.length === 0) {
+      const t = this.stackBackward;
+      this.stackBackward = this.stackForward.reverse();
+      this.stackForward = t;
+    }
+    return this.stackBackward.pop();
+  }
+
+  /**
+   * Get the total amount of items in the queue.
+   */
+  get length(): number {
+    return this.stackForward.length + this.stackBackward.length;
+  }
+}
+
+/**
  * A queue class that resolves a shift() call only when there's
  * elements in the queue.
  */
@@ -30,7 +71,7 @@ export class AsyncQueue<Type> {
   /**
    * The data in the queue.
    */
-  data: Type[] = [];
+  data: Queue<Type> = new Queue();
 
   /**
    * The queue's closed status.
