@@ -233,17 +233,30 @@ const renameFunctionTemplateSchema = {
 
 /**
  * A `deduplicate` function removes event duplicates from the batches
- * it receives.
+ * it receives, considering various pieces of the events.
  */
 interface DeduplicateFunctionTemplate {
-  deduplicate: Record<string, never> | null;
+  deduplicate: {
+    ["consider-name"]?: boolean;
+    ["consider-data"]?: boolean;
+    ["consider-trace"]?: boolean;
+  } | null;
 }
 const deduplicateFunctionTemplateSchema = {
   type: "object",
   properties: {
     deduplicate: {
       anyOf: [
-        { type: "object", properties: {}, additionalProperties: false },
+        {
+          type: "object",
+          properties: {
+            "consider-name": { type: "boolean" },
+            "consider-data": { type: "boolean" },
+            "consider-trace": { type: "boolean" },
+          },
+          additionalProperties: false,
+          required: [],
+        },
         { type: "null" },
       ],
     },
@@ -1000,7 +1013,7 @@ export const runPipeline = async (
     for await (const event of connectedChannel.receive) {
       // `event` already went through the whole pipeline.
       pipelineEvents.inc({ flow: "out" }, 1);
-      logger.debug("Event", event.signature, "reached the end of the pipeline");
+      logger.debug("Event", event.id, "reached the end of the pipeline");
     }
     logger.debug("Finished pipeline operation");
     await stopExposingMetrics();

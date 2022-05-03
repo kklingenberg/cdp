@@ -126,7 +126,7 @@ export const METRICS_NAME_PREFIX: string =
  * The timeout used for emitted HTTP requests.
  */
 export const HTTP_CLIENT_TIMEOUT: number = parseInt(
-  process.env.HTTP_CLIENT_TIMEOUT ?? "60000",
+  process.env.HTTP_CLIENT_TIMEOUT ?? "60", // 60 seconds
   10
 );
 
