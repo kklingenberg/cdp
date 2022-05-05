@@ -7,6 +7,7 @@ import {
   validateWrap,
 } from "./event";
 import {
+  makeGeneratorInput,
   makeSTDINInput,
   makeTailInput,
   makeHTTPInput,
@@ -42,6 +43,34 @@ import { ajv, getSignature, makeLogger, resolveAfter } from "./utils";
  * A logger instance namespaced to this module.
  */
 const logger = makeLogger("api");
+
+/**
+ * The `generator` input produces events at a regular rate.
+ */
+interface GeneratorInputTemplate {
+  generator: { name: string; seconds?: number | string };
+}
+const generatorInputTemplateSchema = {
+  type: "object",
+  properties: {
+    generator: {
+      type: "object",
+      properties: {
+        name: { type: "string", minLength: 1 },
+        seconds: {
+          anyOf: [
+            { type: "number", exclusiveMinimum: 0 },
+            { type: "string", pattern: "^[0-9]+\\.?[0-9]*$" },
+          ],
+        },
+      },
+      additionalProperties: false,
+      required: ["name"],
+    },
+  },
+  additionalProperties: false,
+  required: ["generator"],
+};
 
 /**
  * The `stdin` input form ingests events from STDIN.
@@ -510,6 +539,7 @@ const sendReceiveHTTPFunctionTemplateSchema = {
 interface PipelineTemplate {
   name: string;
   input:
+    | GeneratorInputTemplate
     | STDINInputTemplate
     | TailInputTemplate
     | HTTPInputTemplate
@@ -552,6 +582,7 @@ const pipelineTemplateSchema = {
     name: { type: "string", minLength: 1 },
     input: {
       anyOf: [
+        generatorInputTemplateSchema,
         stdinInputTemplateSchema,
         tailInputTemplateSchema,
         httpInputTemplateSchema,
@@ -647,9 +678,32 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   // restriction.
   // 1. Check the input forms.
   const { input } = thing as { input: object };
+  if ("generator" in input) {
+    const { generator } = input as { generator: object };
+    // 1.1 Check that the event name is valid.
+    const { name } = generator as { name: string };
+    if (!isValidEventName(name)) {
+      throw new Error(
+        "the input has an invalid value for generator.name: " +
+          "it must be a proper event name"
+      );
+    }
+    // 1.2 Check that the interval is valid, if given as a string.
+    if ("seconds" in generator) {
+      const { seconds } = generator as { seconds?: number | string };
+      if (typeof seconds === "string") {
+        const numericSeconds = parseFloat(seconds);
+        if (numericSeconds <= 0) {
+          throw new Error(
+            `the input has an invalid value for generator.seconds (must be > 0)`
+          );
+        }
+      }
+    }
+  }
   if ("poll" in input) {
     const { poll } = input as { poll: object };
-    // 1.1 Check that the poll interval is valid, if given as a string.
+    // 1.3 Check that the poll interval is valid, if given as a string.
     if (typeof poll === "object" && "seconds" in poll) {
       const { seconds } = poll as { seconds?: number | string };
       if (typeof seconds === "string") {
@@ -661,7 +715,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
         }
       }
     }
-    // 1.2 Check that the wrap directive is valid, if given.
+    // 1.4 Check that the wrap directive is valid, if given.
     if (typeof poll === "object" && "wrap" in poll) {
       const { wrap } = poll as { wrap: unknown };
       validateWrap(wrap, "the input's wrap option");
@@ -669,7 +723,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   }
   if ("http" in input) {
     const { http } = input as { http: object };
-    // 1.3 Check that the input port is valid, if given as a string.
+    // 1.5 Check that the input port is valid, if given as a string.
     if (typeof http === "object" && "port" in http) {
       const { port } = http as { port: unknown };
       if (typeof port === "string") {
@@ -681,7 +735,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
         }
       }
     }
-    // 1.4 Check that the wrap directive is valid, if given.
+    // 1.6 Check that the wrap directive is valid, if given.
     if (typeof http === "object" && "wrap" in http) {
       const { wrap } = http as { wrap: unknown };
       validateWrap(wrap, "the input's wrap option");
@@ -689,7 +743,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   }
   if ("tail" in input) {
     const { tail } = input as { tail: string | object };
-    // 1.5 Check that the wrap directive is valid, if given.
+    // 1.7 Check that the wrap directive is valid, if given.
     if (typeof tail === "object" && "wrap" in tail) {
       const { wrap } = tail as { wrap: unknown };
       validateWrap(wrap, "the input's wrap option");
@@ -697,7 +751,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   }
   if ("stdin" in input) {
     const { stdin } = input as { stdin: object | null };
-    // 1.6 Check that the wrap directive is valid, if given.
+    // 1.8 Check that the wrap directive is valid, if given.
     if (stdin !== null && "wrap" in stdin) {
       const { wrap } = stdin as { wrap: unknown };
       validateWrap(wrap, "the input's wrap option");
@@ -878,11 +932,18 @@ export const runPipeline = async (
       );
       break;
     case "stdin":
-    default:
       [inputChannel, inputEnded] = makeSTDINInput(
         template.name,
         signature,
         (template.input as STDINInputTemplate).stdin
+      );
+      break;
+    case "generator":
+    default:
+      [inputChannel, inputEnded] = makeGeneratorInput(
+        template.name,
+        signature,
+        (template.input as GeneratorInputTemplate).generator
       );
       break;
   }
