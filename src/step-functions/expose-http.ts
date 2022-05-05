@@ -149,9 +149,9 @@ export const make = async (
   const makeLink = (ctx: Koa.Context, key: string) => {
     const path = `${endpoint}/${key}/`;
     if (typeof ctx.request.host !== "undefined") {
-      return `<${ctx.request.protocol}://${ctx.request.host}${path}>; rel="prev"`;
+      return `<${ctx.request.protocol}://${ctx.request.host}${path}>; rel="next"`;
     } else {
-      return `<${path}>; rel="prev"`;
+      return `<${path}>; rel="next"`;
     }
   };
   const respond = (ctx: Koa.Context, index: number) => {
@@ -160,8 +160,9 @@ export const make = async (
     } else {
       const { body, type } = responses[index];
       ctx.body = body;
+      const previousIndex = index === 0 ? keySlice.length - 1 : index - 1;
       const previousKey =
-        keySlice[index === 0 ? keySlice.length - 1 : index - 1];
+        previousIndex === currentIndex ? undefined : keySlice[previousIndex];
       ctx.set({
         ...headers,
         ...(type !== null ? { "Content-Type": type } : {}),
