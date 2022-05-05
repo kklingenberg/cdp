@@ -48,24 +48,30 @@ const logger = makeLogger("api");
  * The `generator` input produces events at a regular rate.
  */
 interface GeneratorInputTemplate {
-  generator: { name: string; seconds?: number | string };
+  generator: { name?: string; seconds?: number | string } | string | null;
 }
 const generatorInputTemplateSchema = {
   type: "object",
   properties: {
     generator: {
-      type: "object",
-      properties: {
-        name: { type: "string", minLength: 1 },
-        seconds: {
-          anyOf: [
-            { type: "number", exclusiveMinimum: 0 },
-            { type: "string", pattern: "^[0-9]+\\.?[0-9]*$" },
-          ],
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            name: { type: "string", minLength: 1 },
+            seconds: {
+              anyOf: [
+                { type: "number", exclusiveMinimum: 0 },
+                { type: "string", pattern: "^[0-9]+\\.?[0-9]*$" },
+              ],
+            },
+          },
+          additionalProperties: false,
+          required: [],
         },
-      },
-      additionalProperties: false,
-      required: ["name"],
+        { type: "string", minLength: 1 },
+        { type: "null" },
+      ],
     },
   },
   additionalProperties: false,
@@ -679,17 +685,26 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
   // 1. Check the input forms.
   const { input } = thing as { input: object };
   if ("generator" in input) {
-    const { generator } = input as { generator: object };
-    // 1.1 Check that the event name is valid.
-    const { name } = generator as { name: string };
-    if (!isValidEventName(name)) {
-      throw new Error(
-        "the input has an invalid value for generator.name: " +
-          "it must be a proper event name"
-      );
+    const { generator } = input as { generator: object | string | null };
+    if (generator !== null) {
+      // 1.1 Check that the event name is valid.
+      const name =
+        typeof generator === "string"
+          ? generator
+          : (generator as { name?: string }).name;
+      if (typeof name === "string" && !isValidEventName(name)) {
+        throw new Error(
+          "the input has an invalid value for generator.name: " +
+            "it must be a proper event name"
+        );
+      }
     }
     // 1.2 Check that the interval is valid, if given as a string.
-    if ("seconds" in generator) {
+    if (
+      generator !== null &&
+      typeof generator !== "string" &&
+      "seconds" in generator
+    ) {
       const { seconds } = generator as { seconds?: number | string };
       if (typeof seconds === "string") {
         const numericSeconds = parseFloat(seconds);

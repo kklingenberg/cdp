@@ -36,14 +36,24 @@ const logger = makeLogger("input");
 export const makeGeneratorInput = (
   pipelineName: string,
   pipelineSignature: string,
-  options: { name: string; seconds?: number | string }
+  options: { name?: string; seconds?: number | string } | string | null
 ): [Channel<never, Event>, Promise<void>] => {
-  const n = options.name;
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
-  const intervalDuration =
-    (typeof options.seconds === "string"
+  const n =
+    options === null
+      ? "_"
+      : typeof options === "string"
+      ? options
+      : options.name ?? "_";
+  const durationSeconds =
+    options === null
+      ? 1
+      : typeof options === "string"
+      ? 1
+      : typeof options.seconds === "string"
       ? parseFloat(options.seconds)
-      : options.seconds ?? 1) * 1000;
+      : options.seconds ?? 1;
+  const intervalDuration = durationSeconds * 1000;
   const queue = new AsyncQueue<number>();
   const interval = setInterval(
     () => queue.push(Math.random()),
