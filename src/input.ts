@@ -1,7 +1,7 @@
 import { openSync as openFile, closeSync as closeFile } from "fs";
 import { Readable } from "stream";
 import Tail = require("tail-file");
-import { Channel, AsyncQueue } from "./async-queue";
+import { Channel, AsyncQueue, flatMap } from "./async-queue";
 import { HTTP_SERVER_DEFAULT_PORT, POLL_INPUT_DEFAULT_INTERVAL } from "./conf";
 import {
   Event,
@@ -20,6 +20,65 @@ import { makeLogger } from "./utils";
  * A logger instance namespaced to this module.
  */
 const logger = makeLogger("input");
+
+/**
+ * Creates an input channel that produces events at a fixed rate. It
+ * is mainly intended to help with testing pipelines.
+ *
+ * @param pipelineName The name of the pipeline that will use this
+ * input.
+ * @param pipelineSignature The signature of the pipeline that will
+ * use this input.
+ * @param options The generator options to configure the channel.
+ * @returns A channel that produces events at a fixed rate, and a
+ * promise that never resolves by itself.
+ */
+export const makeGeneratorInput = (
+  pipelineName: string,
+  pipelineSignature: string,
+  options: { name?: string; seconds?: number | string } | string | null
+): [Channel<never, Event>, Promise<void>] => {
+  const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
+  const n =
+    options === null
+      ? "_"
+      : typeof options === "string"
+      ? options
+      : options.name ?? "_";
+  const durationSeconds =
+    options === null
+      ? 1
+      : typeof options === "string"
+      ? 1
+      : typeof options.seconds === "string"
+      ? parseFloat(options.seconds)
+      : options.seconds ?? 1;
+  const intervalDuration = durationSeconds * 1000;
+  const queue = new AsyncQueue<number>();
+  const interval = setInterval(
+    () => queue.push(Math.random()),
+    intervalDuration
+  );
+  const channel = flatMap(async (d) => {
+    arrivalTimestamp.update();
+    const event = await eventParser({ n, d });
+    return [event];
+  }, queue.asChannel());
+  return [
+    {
+      ...channel,
+      send: () => {
+        logger.warn("Can't send events to an input channel");
+        return false;
+      },
+      close: async () => {
+        clearInterval(interval);
+        await channel.close();
+      },
+    },
+    queue.drain,
+  ];
+};
 
 /**
  * Creates an input channel based on data coming from STDIN. Returns a
