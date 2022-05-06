@@ -6,13 +6,11 @@ import {
   wrapDirectiveSchema,
   validateWrap,
 } from "./event";
-import {
-  makeGeneratorInput,
-  makeSTDINInput,
-  makeTailInput,
-  makeHTTPInput,
-  makePollInput,
-} from "./input";
+import { make as makeGeneratorInput } from "./input/generator";
+import { make as makeSTDINInput } from "./input/stdin";
+import { make as makeTailInput } from "./input/tail";
+import { make as makeHTTPInput } from "./input/http";
+import { make as makePollInput } from "./input/poll";
 import { isHealthy } from "./io/jq";
 import {
   pipelineEvents,
@@ -32,6 +30,7 @@ import { make as makeDeduplicateFunction } from "./step-functions/deduplicate";
 import { make as makeKeepFunction } from "./step-functions/keep";
 import { make as makeKeepWhenFunction } from "./step-functions/keep-when";
 import { make as makeRenameFunction } from "./step-functions/rename";
+import { make as makeExposeHTTPFunction } from "./step-functions/expose-http";
 import { make as makeSendHTTPFunction } from "./step-functions/send-http";
 import { make as makeSendReceiveHTTPFunction } from "./step-functions/send-receive-http";
 import { make as makeSendReceiveJqFunction } from "./step-functions/send-receive-jq";
@@ -151,11 +150,11 @@ const httpInputTemplateSchema = {
   properties: {
     http: {
       anyOf: [
-        { type: "string", minLength: 1 },
+        { type: "string", minLength: 1, pattern: "^/.*$" },
         {
           type: "object",
           properties: {
-            endpoint: { type: "string", minLength: 1 },
+            endpoint: { type: "string", minLength: 1, pattern: "^/.*$" },
             port: {
               anyOf: [
                 { type: "integer", minimum: 1, maximum: 65535 },
@@ -452,6 +451,59 @@ const sendHTTPFunctionTemplateSchema = {
 };
 
 /**
+ * An `expose-http` function keeps a buffer of windows that it exposes
+ * in an HTTP server.
+ */
+interface ExposeHTTPFunctionTemplate {
+  ["expose-http"]: {
+    endpoint: string;
+    port: number | string;
+    responses: number | string;
+    headers?: { [key: string]: string | number | boolean };
+    ["jq-expr"]?: string;
+  };
+}
+const exposeHTTPFunctionTemplateSchema = {
+  type: "object",
+  properties: {
+    "expose-http": {
+      type: "object",
+      properties: {
+        endpoint: { type: "string", minLength: 1, pattern: "^/.*$" },
+        port: {
+          anyOf: [
+            { type: "integer", minimum: 1, maximum: 65535 },
+            { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
+          ],
+        },
+        responses: {
+          anyOf: [
+            { type: "integer", minimum: 1 },
+            { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
+          ],
+        },
+        headers: {
+          type: "object",
+          properties: {},
+          additionalProperties: {
+            anyOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+            ],
+          },
+        },
+        "jq-expr": { type: "string", minLength: 1 },
+      },
+      additionalProperties: false,
+      required: ["endpoint", "port", "responses"],
+    },
+  },
+  additionalProperties: false,
+  required: ["expose-http"],
+};
+
+/**
  * A `send-receive-jq` function processes batches of events with a jq
  * program, and the transformed events are sent back to the rest of
  * the pipeline.
@@ -567,6 +619,7 @@ interface PipelineTemplate {
         | SendSTDOUTFunctionTemplate
         | SendFileFunctionTemplate
         | SendHTTPFunctionTemplate
+        | ExposeHTTPFunctionTemplate
         | SendReceiveJqFunctionTemplate
         | SendReceiveHTTPFunctionTemplate;
       reduce?:
@@ -577,6 +630,7 @@ interface PipelineTemplate {
         | SendSTDOUTFunctionTemplate
         | SendFileFunctionTemplate
         | SendHTTPFunctionTemplate
+        | ExposeHTTPFunctionTemplate
         | SendReceiveJqFunctionTemplate
         | SendReceiveHTTPFunctionTemplate;
     };
@@ -632,6 +686,7 @@ const pipelineTemplateSchema = {
               sendSTDOUTFunctionTemplateSchema,
               sendFileFunctionTemplateSchema,
               sendHTTPFunctionTemplateSchema,
+              exposeHTTPFunctionTemplateSchema,
               sendReceiveJqFunctionTemplateSchema,
               sendReceiveHTTPFunctionTemplateSchema,
             ],
@@ -645,6 +700,7 @@ const pipelineTemplateSchema = {
               sendSTDOUTFunctionTemplateSchema,
               sendFileFunctionTemplateSchema,
               sendHTTPFunctionTemplateSchema,
+              exposeHTTPFunctionTemplateSchema,
               sendReceiveJqFunctionTemplateSchema,
               sendReceiveHTTPFunctionTemplateSchema,
             ],
@@ -865,7 +921,19 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
         }
       }
     }
-    // 2.5.3 If using send-receive-jq or send-receive-http, check that
+    // 2.5.3 If using expose-http, the port must be valid if given as a string.
+    if ("expose-http" in fn) {
+      if (typeof fn["expose-http"].port === "string") {
+        const numericPort = parseInt(fn["expose-http"].port, 10);
+        if (numericPort < 1 || numericPort > 65535) {
+          throw new Error(
+            `step '${name}' uses an invalid expose-http.port value ` +
+              "(must be between 1 and 65535, inclusive)"
+          );
+        }
+      }
+    }
+    // 2.5.4 If using send-receive-jq or send-receive-http, check that
     // the wrap option is valid, if given.
     if ("send-receive-jq" in fn) {
       if (typeof fn["send-receive-jq"] !== "string") {
@@ -1010,6 +1078,15 @@ export const runPipeline = async (
           signature,
           (definition[functionMode] as SendReceiveJqFunctionTemplate)[
             "send-receive-jq"
+          ]
+        );
+        break;
+      case "expose-http":
+        fn = await makeExposeHTTPFunction(
+          template.name,
+          signature,
+          (definition[functionMode] as ExposeHTTPFunctionTemplate)[
+            "expose-http"
           ]
         );
         break;

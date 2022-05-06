@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+
+  # Scrape cdp metrics about cdp itself, not the events flowing through.
+  - job_name: "cdp"
+    static_configs:
+      - targets: ["cdp:8001"]
+
+  # Scrape the pipeline-generated events formatted as metrics.
+  - job_name: "cdp_events"
+    static_configs:
+      - targets: ["cdp:8002"]

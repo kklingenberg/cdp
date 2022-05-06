@@ -1,5 +1,5 @@
 ---
-name: "initial"
+name: "third"
 input:
   http: /events
 
@@ -19,5 +19,11 @@ steps:
   forward:
     after:
       - debug
-    flatmap:
-      send-file: /shared/events
+    window:
+      events: 100
+      seconds: 5
+    reduce:
+      expose-http:
+        endpoint: /events
+        port: 8002
+        responses: 5

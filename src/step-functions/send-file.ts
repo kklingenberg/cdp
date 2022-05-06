@@ -40,7 +40,7 @@ export const make = async (
       events.map((event) => JSON.stringify(event)).join("\n") + "\n";
     promiseChain = promiseChain
       .then(() => appendFile(path, output))
-      .catch((err) => logger.error("Couldn't append to file", path, ":", err));
+      .catch((err) => logger.error(`Couldn't append to file ${path}: ${err}`));
   };
   let closeExternal: () => Promise<void> = async () => {
     // Empty function
@@ -62,7 +62,7 @@ export const make = async (
               : JSON.stringify(response)) + "\n"
           );
         } catch (err) {
-          logger.error("Couldn't append to file", path, ":", err);
+          logger.error(`Couldn't append to file ${path}: ${err}`);
         }
       }
     })();

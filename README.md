@@ -557,6 +557,43 @@ the request is forced to `application/x-ndjson`.
 using the `jq-expr` option, the request content type cannot be
 altered.
 
+#### `expose-http`
+
+**`steps.<name>.(reduce|flatmap).expose-http`** **object**, a function
+that always sends forward the events in the vectors it receives,
+unmodified. It also exposes those vectors in an HTTP server.
+
+**`steps.<name>.(reduce|flatmap).expose-http.endpoint`** required
+**string**, an URL path that will be used to expose windows. The
+latest window at any given time will be accesible through this path,
+and previous windows will be reachable using the URI found in the
+[Link
+header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Link)
+of the response, if present.
+
+**`steps.<name>.(reduce|flatmap).expose-http.port`** required
+**number** or **string**, the TCP port used to listen for
+requests. May not be the same used by the [`http` input form](#http).
+
+**`steps.<name>.(reduce|flatmap).expose-http.responses`** required
+**number** or **string**, the total amount of responses to keep in
+memory for exposition.
+
+**`steps.<name>.(reduce|flatmap).expose-http.headers`** optional
+**object**, the extra HTTP response headers to use on successful
+responses. The `Content-Type` header can be set only if the `jq-expr`
+option is used, else it will be set to `application/x-ndjson`. The
+`ETag` and `Link` headers can never be changed.
+
+**`steps.<name>.(reduce|flatmap).expose-http.jq-expr`** optional
+**string**, an optional `jq` filter to apply to event windows before
+creating the responses. If this option is used, each distinct value
+produced by the filter is used for a separate response. For example,
+if using the filter `.[]`, then the even window is split into each
+event it contains, which are each in turn kept in the buffer of
+maximum size `responses`. It might be preferrable to use jq's `map()`
+instead to process _and_ keeping them in a single response.
+
 #### `send-receive-jq`
 
 **`steps.<name>.(reduce|flatmap).send-receive-jq`** **string** or

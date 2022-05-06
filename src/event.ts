@@ -289,7 +289,7 @@ export const parseVector = async (
       const event = await parser(rawVector);
       return [event];
     } catch (err) {
-      logger.warn("Event dropped after", `${context};`, new String(err));
+      logger.warn(`Event dropped after ${context}; ${err}`);
       return [];
     }
   }
