@@ -343,6 +343,8 @@ export const makePollInput = (
   const headers = typeof options === "string" ? {} : options.headers ?? {};
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const queue = new AsyncQueue<unknown>();
+  // Keep a record of the latest ETag, so as to not duplicate events.
+  let latestETag: string | null = null;
   // One poll is a GET request to the target.
   const fetchOne = async () => {
     try {
@@ -353,6 +355,15 @@ export const makePollInput = (
         ":",
         response.status
       );
+      const etag = response.headers["etag"] ?? null;
+      if (latestETag !== null && latestETag === etag) {
+        logger.info(
+          "Response was found to be equivalent to previous response; " +
+            "it won't be considered."
+        );
+        return;
+      }
+      latestETag = etag;
       arrivalTimestamp.update();
       for await (const thing of parse(response.data)) {
         queue.push(wrapper(thing));
