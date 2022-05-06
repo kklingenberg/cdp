@@ -127,7 +127,7 @@ export const mapParse = <T>(
   });
   // Attempt to parse whatever was left.
   stream.on("error", (err) => {
-    logger.warn("Parsed stream reported error:", new String(err));
+    logger.warn(`Parsed stream reported error: ${err}`);
     done = true;
     extractLinesIntoQueue(fn, Buffer.concat(chunks), queue, true);
     queue.close();

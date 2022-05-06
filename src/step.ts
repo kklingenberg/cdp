@@ -181,8 +181,7 @@ export const makeWindowed = (
       () => logger.info(`Step ${options.name} finished operation`),
       (err) =>
         logger.warn(
-          `Step ${options.name} encountered an error during operation`,
-          err
+          `Step ${options.name} encountered an error during operation: ${err}`
         )
     );
     return {
@@ -215,8 +214,7 @@ export const makeStreamlined =
       () => logger.info(`Step ${options.name} finished operation`),
       (err) =>
         logger.warn(
-          `Step ${options.name} encountered an error during operation`,
-          err
+          `Step ${options.name} encountered an error during operation: ${err}`
         )
     );
     return {

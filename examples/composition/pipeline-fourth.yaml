@@ -1,7 +1,7 @@
 ---
-name: "terminal"
+name: "fourth"
 input:
-  http: /events
+  poll: "${SOURCE}"
 
 steps:
   debug:

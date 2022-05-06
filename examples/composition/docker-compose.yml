@@ -9,23 +9,35 @@ x-cdp: &cdp
 version: "3.8"
 
 services:
-  initial:
+  first:
     <<: *cdp
-    command: ["-e", "/app/pipeline-initial.yaml"]
+    command: ["-e", "/app/pipeline-first.yaml"]
     ports:
       - 8000:8000
     depends_on:
-      - middle
+      - second
 
-  middle:
+  second:
     <<: *cdp
-    command: ["-e", "/app/pipeline-middle.yaml"]
+    command: ["-e", "/app/pipeline-second.yaml"]
+    environment:
+      TARGET: http://third:8000/events
     depends_on:
-      - terminal
+      - third
 
-  terminal:
+  third:
     <<: *cdp
-    command: ["-e", "/app/pipeline-terminal.yaml"]
+    command: ["-e", "/app/pipeline-third.yaml"]
+    expose:
+      - "8002"
+
+  fourth:
+    <<: *cdp
+    command: ["-e", "/app/pipeline-fourth.yaml"]
+    environment:
+      SOURCE: http://third:8002/events
+    depends_on:
+      - third
 
 volumes:
   bridge:

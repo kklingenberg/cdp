@@ -54,8 +54,7 @@ export const sendEvents = (
         logger.warn(
           "sendEvents couldn't forward",
           events.length,
-          "events:",
-          err
+          `events: ${err}`
         )
     );
 
@@ -88,7 +87,7 @@ export const sendThing = (
     })
     .then(
       () => logger.debug("sendThing successfully forwarded its payload"),
-      (err) => logger.warn("sendThing couldn't forward its payload:", err)
+      (err) => logger.warn(`sendThing couldn't forward its payload: ${err}`)
     );
 
 /**
@@ -157,8 +156,7 @@ export const sendReceiveEvents = async (
     logger.warn(
       "sendReceiveEvents couldn't forward",
       events.length,
-      "events:",
-      err
+      `events: ${err}`
     );
     return [];
   }
@@ -221,7 +219,7 @@ export const sendReceiveThing = async (
     );
     return responseEvents;
   } catch (err) {
-    logger.warn("sendReceiveThing couldn't forward its payload:", err);
+    logger.warn(`sendReceiveThing couldn't forward its payload: ${err}`);
     return [];
   }
 };

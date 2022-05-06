@@ -6,13 +6,11 @@ import {
   wrapDirectiveSchema,
   validateWrap,
 } from "./event";
-import {
-  makeGeneratorInput,
-  makeSTDINInput,
-  makeTailInput,
-  makeHTTPInput,
-  makePollInput,
-} from "./input";
+import { make as makeGeneratorInput } from "./input/generator";
+import { make as makeSTDINInput } from "./input/stdin";
+import { make as makeTailInput } from "./input/tail";
+import { make as makeHTTPInput } from "./input/http";
+import { make as makePollInput } from "./input/poll";
 import { isHealthy } from "./io/jq";
 import {
   pipelineEvents,

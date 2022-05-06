@@ -1,5 +1,5 @@
 ---
-name: "middle"
+name: "second"
 input:
   tail: /shared/events
 
@@ -20,4 +20,4 @@ steps:
     after:
       - debug
     flatmap:
-      send-http: http://terminal:8000/events
+      send-http: "${TARGET}"
