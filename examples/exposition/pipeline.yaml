@@ -1,0 +1,19 @@
+---
+name: "Event exposition"
+
+input:
+  generator: exposition_example
+
+steps:
+  expose for prometheus:
+    flatmap:
+      expose-http:
+        endpoint: /metrics
+        port: 8002
+        responses: 100
+        headers:
+          Content-Type: text/plain; version=0.0.4
+        jq-expr: |
+          "# TYPE " + .[0].n + " gauge\n" +
+          (map(.n + " " + (.d | tostring)) | join("\n")) +
+          "\n"
