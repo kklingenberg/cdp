@@ -32,9 +32,9 @@ export const getSignature = (...args: unknown[]): Promise<string> =>
     hash.on("error", reject);
     try {
       args
-        .filter((arg) => typeof arg !== "undefined")
-        .map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg)))
-        .forEach((arg) => hash.write(arg));
+        .map((arg, index) => ({ arg, index }))
+        .filter(({ arg }) => typeof arg !== "undefined")
+        .forEach((arg) => hash.write(JSON.stringify(arg)));
     } catch (err) {
       reject(err);
     } finally {

@@ -29,6 +29,15 @@ test("Signatures can't be generated for non JSON-encodable things", async () => 
   await expect(utils.getSignature(undefined)).rejects.toThrow();
 });
 
+test("Signatures are distinct", async () => {
+  const s1 = await utils.getSignature("foo", "bar");
+  const s2 = await utils.getSignature("foobar");
+  const s3 = await utils.getSignature("foo", undefined, "bar");
+  expect(s1).not.toEqual(s2);
+  expect(s1).not.toEqual(s3);
+  expect(s2).not.toEqual(s3);
+});
+
 test("Loggers can be created according to the current log level", () => {
   // Assumes the current log level is 'error'.
   // This tests uses the fact that the null logger functions return
