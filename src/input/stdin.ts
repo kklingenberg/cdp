@@ -8,6 +8,7 @@ import {
   chooseParser,
   makeWrapper,
 } from "../event";
+import { getSTDIN } from "../io/stdin";
 import { makeLogger } from "../utils";
 
 /**
@@ -38,7 +39,8 @@ export const make = (
   );
   const wrapper = makeWrapper(options?.wrap);
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
-  const rawReceive = parse(process.stdin);
+  const stdin = getSTDIN();
+  const rawReceive = parse(stdin);
   let notifyDrained: () => void;
   const drained: Promise<void> = new Promise((resolve) => {
     notifyDrained = resolve;
@@ -59,7 +61,7 @@ export const make = (
         },
         receive: receive(),
         close: async () => {
-          process.stdin.destroy();
+          stdin.destroy();
           await drained;
           logger.debug("Drained STDIN input");
         },
