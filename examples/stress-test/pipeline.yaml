@@ -112,7 +112,7 @@ steps:
 
           map(
             .d as $n
-            | expmod(31; $n - 1; $n)
+            | expmod(73; $n - 1; $n)
             | if . == 1 then $n else empty end
           ) | .[]
         wrap: "candidate.fermat.73"
