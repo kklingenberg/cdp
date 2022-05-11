@@ -152,3 +152,24 @@ export const HTTP_CLIENT_MAX_CONTENT_LENGTH: number = parseInt(
   process.env.HTTP_CLIENT_MAX_CONTENT_LENGTH ?? "52428800", // 50 MiB
   10
 );
+
+/**
+ * The maximum number of additional request attempts for each HTTP
+ * response received with status 5xx.
+ */
+export const HTTP_CLIENT_MAX_RETRIES: number = parseInt(
+  process.env.HTTP_CLIENT_MAX_RETRIES ?? "4",
+  10
+);
+
+/**
+ * The constant factor used in HTTP requests exponential backoff, in
+ * seconds.
+ */
+export const HTTP_CLIENT_BACKOFF_FACTOR: number = Math.max(
+  parseInt(
+    process.env.HTTP_CLIENT_BACKOFF_FACTOR ?? (NODE_ENV === "test" ? "0" : "1"), // 1 second
+    10
+  ),
+  0
+);
