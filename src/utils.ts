@@ -145,3 +145,26 @@ export const envsubst = (thing: unknown): unknown => {
     return thing;
   }
 };
+
+/**
+ * Merges HTTP headers as given, preserving the last ones in case of
+ * collision. This procedure ignores capitalization in header keys,
+ * and assumes that each header set given doesn't contain collisions
+ * within. If they do, the keys remaining in the result are chosen
+ * arbitrarily.
+ *
+ * @param headers The headers to merge.
+ * @returns The merged headers.
+ */
+export const mergeHeaders = <T>(
+  ...headers: Record<string, T>[]
+): Record<string, T> =>
+  headers.reduce(
+    (merged, h) => ({
+      ...merged,
+      ...Object.fromEntries(
+        Object.entries(h).map(([k, v]) => [k.toLowerCase(), v])
+      ),
+    }),
+    {}
+  );

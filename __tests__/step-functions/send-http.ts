@@ -40,7 +40,7 @@ test("Send-http works as expected", async () => {
   expect(mockRequest.mock.calls[0][0].method).toEqual(method);
   expect(mockRequest.mock.calls[0][0].data).toEqual(events);
   expect(mockRequest.mock.calls[0][0].headers).toEqual({
-    "Content-Type": "application/x-ndjson",
+    "content-type": "application/x-ndjson",
   });
 });
 
@@ -68,7 +68,7 @@ test("Send-http works when specifying a target plainly", async () => {
   expect(mockRequest.mock.calls[0][0].method).toEqual(method);
   expect(mockRequest.mock.calls[0][0].data).toEqual(events);
   expect(mockRequest.mock.calls[0][0].headers).toEqual({
-    "Content-Type": "application/x-ndjson",
+    "content-type": "application/x-ndjson",
   });
 });
 
@@ -101,13 +101,13 @@ test("Send-http works when specifying a jq expression and headers", async () => 
   expect(mockRequest.mock.calls[0][0].method).toEqual(method);
   expect(mockRequest.mock.calls[0][0].data).toEqual("hello");
   expect(mockRequest.mock.calls[0][0].headers).toEqual({
-    "Content-Type": "text/plain",
+    "content-type": "text/plain",
   });
   expect(mockRequest.mock.calls[1]).toHaveLength(1);
   expect(mockRequest.mock.calls[1][0].url).toEqual(target);
   expect(mockRequest.mock.calls[1][0].method).toEqual(method);
   expect(mockRequest.mock.calls[1][0].data).toEqual("world");
   expect(mockRequest.mock.calls[1][0].headers).toEqual({
-    "Content-Type": "text/plain",
+    "content-type": "text/plain",
   });
 });

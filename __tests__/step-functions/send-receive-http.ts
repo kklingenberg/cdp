@@ -44,7 +44,7 @@ test("Send-receive-http works as expected", async () => {
   expect(mockRequest.mock.calls[0][0].method).toEqual(method);
   expect(mockRequest.mock.calls[0][0].data).toEqual(events);
   expect(mockRequest.mock.calls[0][0].headers).toEqual({
-    "Content-Type": "application/x-ndjson",
+    "content-type": "application/x-ndjson",
   });
 });
 
@@ -83,6 +83,6 @@ test("Send-receive-http works when using jq as intermediary", async () => {
     events.map((e) => e.toJSON()).map((e) => ({ ...e, n: "changed" }))
   );
   expect(mockRequest.mock.calls[0][0].headers).toEqual({
-    "Content-Type": "application/json",
+    "content-type": "application/json",
   });
 });

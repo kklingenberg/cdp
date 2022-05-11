@@ -1,3 +1,5 @@
+import { AxiosRequestConfig, AxiosResponse, AxiosError } from "axios";
+import { HTTP_CLIENT_MAX_RETRIES, HTTP_CLIENT_BACKOFF_FACTOR } from "../conf";
 import {
   Event,
   makeOldEventParser,
@@ -6,13 +8,51 @@ import {
   chooseParser,
   makeWrapper,
 } from "../event";
-import { makeLogger } from "../utils";
+import { makeLogger, resolveAfter, mergeHeaders } from "../utils";
 import { axiosInstance } from "./axios";
 
 /**
  * A logger instance namespaced to this module.
  */
 const logger = makeLogger("io/http-client");
+
+/**
+ * Attempt a request, and retry it if it fails with 5xx status codes.
+ *
+ * @param args Axios arguments.
+ * @param attempt The current attempt number.
+ * @returns A promise that resolves with the final response, or
+ * rejects with an error.
+ */
+export const request = async (
+  args: AxiosRequestConfig,
+  attempt = 1
+): Promise<AxiosResponse> => {
+  try {
+    return await axiosInstance.request(args);
+  } catch (_err) {
+    const err = _err as AxiosError;
+    if (
+      attempt <= HTTP_CLIENT_MAX_RETRIES &&
+      err.response &&
+      err.response.status >= 500 &&
+      err.response.status < 600
+    ) {
+      logger.info(
+        "Request failed with status:",
+        err.response.status,
+        "; retrying in ",
+        HTTP_CLIENT_BACKOFF_FACTOR * 2 ** attempt,
+        "seconds..."
+      );
+      // Apply exponential backoff.
+      await resolveAfter(HTTP_CLIENT_BACKOFF_FACTOR * 1000 * 2 ** attempt);
+      return await request(args, attempt + 1);
+    } else {
+      throw err;
+    }
+  }
+};
 
 /**
  * Sends events to the specified HTTP target, and ignore the response
@@ -33,30 +73,28 @@ export const sendEvents = (
   method: "POST" | "PUT" | "PATCH",
   headers: { [key: string]: string | number | boolean }
 ): Promise<void> =>
-  axiosInstance
-    .request({
-      url: target,
-      method,
-      data: events,
-      transformRequest: [
-        (data: Event[]) => data.map((e) => JSON.stringify(e)).join("\n") + "\n",
-      ],
-      headers: { ...headers, "Content-Type": "application/x-ndjson" },
-    })
-    .then(
-      () =>
-        logger.debug(
-          "sendEvents successfully forwarded",
-          events.length,
-          "events"
-        ),
-      (err) =>
-        logger.warn(
-          "sendEvents couldn't forward",
-          events.length,
-          `events: ${err}`
-        )
-    );
+  request({
+    url: target,
+    method,
+    data: events,
+    transformRequest: [
+      (data: Event[]) => data.map((e) => JSON.stringify(e)).join("\n") + "\n",
+    ],
+    headers: mergeHeaders(headers, { "Content-Type": "application/x-ndjson" }),
+  }).then(
+    () =>
+      logger.debug(
+        "sendEvents successfully forwarded",
+        events.length,
+        "events"
+      ),
+    (err) =>
+      logger.warn(
+        "sendEvents couldn't forward",
+        events.length,
+        `events: ${err}`
+      )
+  );
 
 /**
  * Sends a thing of unknown shape to the specified HTTP target, and
@@ -75,20 +113,18 @@ export const sendThing = (
   method: "POST" | "PUT" | "PATCH",
   headers: { [key: string]: string | number | boolean }
 ): Promise<void> =>
-  axiosInstance
-    .request({
-      url: target,
-      method,
-      data: thing,
-      transformRequest: [
-        (data) => (typeof data === "string" ? data : JSON.stringify(data)),
-      ],
-      headers,
-    })
-    .then(
-      () => logger.debug("sendThing successfully forwarded its payload"),
-      (err) => logger.warn(`sendThing couldn't forward its payload: ${err}`)
-    );
+  request({
+    url: target,
+    method,
+    data: thing,
+    transformRequest: [
+      (data) => (typeof data === "string" ? data : JSON.stringify(data)),
+    ],
+    headers: mergeHeaders(headers),
+  }).then(
+    () => logger.debug("sendThing successfully forwarded its payload"),
+    (err) => logger.warn(`sendThing couldn't forward its payload: ${err}`)
+  );
 
 /**
  * Sends events to the specified HTTP target, and interpret the
@@ -122,14 +158,16 @@ export const sendReceiveEvents = async (
   const parse = chooseParser(wrap);
   const wrapper = makeWrapper(wrap);
   try {
-    const response = await axiosInstance.request({
+    const response = await request({
       url: target,
       method,
       data: events,
       transformRequest: [
         (data: Event[]) => data.map((e) => JSON.stringify(e)).join("\n") + "\n",
       ],
-      headers: { ...headers, "Content-Type": "application/x-ndjson" },
+      headers: mergeHeaders(headers, {
+        "Content-Type": "application/x-ndjson",
+      }),
     });
     logger.debug(
       "sendReceiveEvents successfully forwarded",
@@ -192,14 +230,14 @@ export const sendReceiveThing = async (
   const parse = chooseParser(wrap);
   const wrapper = makeWrapper(wrap);
   try {
-    const response = await axiosInstance.request({
+    const response = await request({
       url: target,
       method,
       data: thing,
       transformRequest: [
         (data) => (typeof data === "string" ? data : JSON.stringify(data)),
       ],
-      headers,
+      headers: mergeHeaders(headers),
     });
     logger.debug("sendReceiveThing successfully forwarded its payload");
     const responseEvents = [];

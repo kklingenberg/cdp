@@ -1,7 +1,7 @@
 import Koa from "koa";
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event } from "../event";
-import { getSignature, makeLogger } from "../utils";
+import { getSignature, makeLogger, mergeHeaders } from "../utils";
 import { makeHTTPServer } from "../io/http-server";
 import { makeChannel } from "../io/jq";
 
@@ -94,7 +94,7 @@ export const make = async (
     endpoint: string;
     port: number | string;
     responses: number | string;
-    headers?: { [key: string]: string | number | boolean };
+    headers?: { [key: string]: string | string[] };
     ["jq-expr"]?: string;
   }
 ): Promise<Channel<Event[], Event>> => {
@@ -163,14 +163,16 @@ export const make = async (
       const previousIndex = index === 0 ? keySlice.length - 1 : index - 1;
       const previousKey =
         previousIndex === currentIndex ? undefined : keySlice[previousIndex];
-      ctx.set({
-        ...headers,
-        ...(type !== null ? { "Content-Type": type } : {}),
-        ...(typeof previousKey !== "undefined"
-          ? { Link: makeLink(ctx, previousKey) }
-          : {}),
-        ETag: `"${keySlice[index]}"`,
-      });
+      ctx.set(
+        mergeHeaders(
+          headers,
+          type !== null ? { "Content-Type": type } : {},
+          typeof previousKey !== "undefined"
+            ? { Link: makeLink(ctx, previousKey) }
+            : {},
+          { ETag: `"${keySlice[index]}"` }
+        )
+      );
     }
   };
   const server = makeHTTPServer(port, async (ctx) => {

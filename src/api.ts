@@ -459,7 +459,7 @@ interface ExposeHTTPFunctionTemplate {
     endpoint: string;
     port: number | string;
     responses: number | string;
-    headers?: { [key: string]: string | number | boolean };
+    headers?: { [key: string]: string | string[] };
     ["jq-expr"]?: string;
   };
 }
@@ -488,8 +488,7 @@ const exposeHTTPFunctionTemplateSchema = {
           additionalProperties: {
             anyOf: [
               { type: "string" },
-              { type: "number" },
-              { type: "boolean" },
+              { type: "array", items: { type: "string" } },
             ],
           },
         },
