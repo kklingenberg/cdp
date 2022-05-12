@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+# Set the proper user and working directory so that files created
+# inside the container have the proper ownership outside the
+# container.
+exec docker compose run \
+     --rm \
+     -u "$(id -u):$(id -g)" \
+     -v $(pwd)/hasura:/app \
+     -e "HOME=/app/.cli" \
+     -w /app \
+     cli \
+     "$@"

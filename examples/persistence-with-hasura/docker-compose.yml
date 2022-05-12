@@ -1,0 +1,62 @@
+x-service: &service
+  restart: "always"
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "5"
+
+x-hasura-environment: &hasura-environment
+  HASURA_GRAPHQL_DATABASE_URL: postgres://postgres:master-postgres-password@postgres:5432/cdp
+  HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+  HASURA_GRAPHQL_MIGRATIONS_SERVER_TIMEOUT: "10"
+  GRAPHQL_API_HOST: graphql-engine
+
+version: "3.8"
+
+services:
+  cdp:
+    build:
+      context: ../..
+    image: cdp:dev
+    volumes:
+      - .:/app
+    command: ["/app/pipeline.yaml"]
+    ports:
+      - 8000:8000
+      - 8001:8001
+
+  graphql-engine:
+    <<: *service
+    image: hasura/graphql-engine:v2.6.1.cli-migrations-v3
+    environment: *hasura-environment
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./hasura/migrations:/hasura-migrations
+      - ./hasura/metadata:/hasura-metadata
+    depends_on:
+      - postgres
+
+  # Use this service with the 'hasura-cli' utility
+  cli:
+    <<: *service
+    restart: "no"
+    image: hasura/graphql-engine:v2.6.1.cli-migrations-v3
+    environment: *hasura-environment
+    entrypoint: ["hasura-cli"]
+    command: ["--help"]
+    depends_on:
+      - graphql-engine
+
+  postgres:
+    <<: *service
+    image: postgres:13.6-alpine
+    environment:
+      POSTGRES_PASSWORD: master-postgres-password
+      POSTGRES_DB: cdp
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+volumes:
+  postgres:

@@ -414,6 +414,7 @@ interface SendHTTPFunctionTemplate {
         method?: "POST" | "PUT" | "PATCH";
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
+        concurrent?: number | string;
       };
 }
 const sendHTTPFunctionTemplateSchema = {
@@ -438,6 +439,12 @@ const sendHTTPFunctionTemplateSchema = {
                   { type: "boolean" },
                 ],
               },
+            },
+            concurrent: {
+              anyOf: [
+                { type: "integer", minimum: 1 },
+                { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
+              ],
             },
           },
           additionalProperties: false,

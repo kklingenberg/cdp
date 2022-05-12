@@ -1,4 +1,5 @@
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
+import { HTTP_CLIENT_DEFAULT_CONCURRENCY } from "../conf";
 import { Event } from "../event";
 import { sendEvents, sendThing } from "../io/http-client";
 import { makeChannel } from "../io/jq";
@@ -25,17 +26,21 @@ export const make = async (
         method?: "POST" | "PUT" | "PATCH";
         ["jq-expr"]?: string;
         headers?: { [key: string]: string | number | boolean };
+        concurrent?: number | string;
       }
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
   const method =
     typeof options === "string" ? "POST" : options.method ?? "POST";
   const headers = typeof options === "string" ? {} : options.headers ?? {};
-  let forwarder: (events: Event[]) => void = (events: Event[]) =>
-    sendEvents(events, target, method, headers);
-  let closeExternal: () => Promise<void> = async () => {
-    // Empty function
-  };
+  const concurrent =
+    typeof options === "string"
+      ? HTTP_CLIENT_DEFAULT_CONCURRENCY
+      : typeof options.concurrent === "string"
+      ? parseInt(options.concurrent, 10)
+      : options.concurrent ?? 10;
+  let forwarder: (events: Event[]) => void;
+  let closeExternal: () => Promise<void>;
   if (typeof options !== "string" && typeof options["jq-expr"] === "string") {
     const jqChannel: Channel<Event[], unknown> = await makeChannel(
       options["jq-expr"]
@@ -44,11 +49,30 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
     // Start the sending of jq to the HTTP target.
     (async () => {
+      const requests = new Array<Promise<void>>(concurrent);
+      let i = 0;
       for await (const response of jqChannel.receive) {
-        // Note: the response is not awaited for. This sends requests
-        // in parallel for as much parallelism as is supported by the
-        // runtime.
-        sendThing(response, target, method, headers);
+        requests[i++] = sendThing(response, target, method, headers);
+        if (i === concurrent) {
+          await Promise.all(requests);
+          i = 0;
+        }
+      }
+    })();
+  } else {
+    const accumulatingChannel = new AsyncQueue<Event[]>().asChannel();
+    forwarder = accumulatingChannel.send.bind(accumulatingChannel);
+    closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
+    // Start the sending of jq to the HTTP target.
+    (async () => {
+      const requests = new Array<Promise<void>>(concurrent);
+      let i = 0;
+      for await (const events of accumulatingChannel.receive) {
+        requests[i++] = sendEvents(events, target, method, headers);
+        if (i === concurrent) {
+          await Promise.all(requests);
+          i = 0;
+        }
       }
     })();
   }
