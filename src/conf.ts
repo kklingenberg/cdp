@@ -173,3 +173,12 @@ export const HTTP_CLIENT_BACKOFF_FACTOR: number = Math.max(
   ),
   0
 );
+
+/**
+ * The maximum amount of concurrent HTTP requests to execute in a
+ * forwarding step function.
+ */
+export const HTTP_CLIENT_DEFAULT_CONCURRENCY: number = Math.max(
+  parseInt(process.env.HTTP_CLIENT_DEFAULT_CONCURRENCY ?? "10", 10),
+  1
+);

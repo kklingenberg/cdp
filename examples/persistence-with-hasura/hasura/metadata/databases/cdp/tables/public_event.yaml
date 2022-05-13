@@ -1,0 +1,9 @@
+table:
+  schema: public
+  name: event
+array_relationships:
+  - name: traces
+    using:
+      foreign_key_constraint_on:
+        table: trace
+        columns: ["event_id"]

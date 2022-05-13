@@ -1,0 +1,7 @@
+table:
+  schema: public
+  name: trace
+object_relationships:
+  - name: event
+    using:
+      foreign_key_constraint_on: event_id

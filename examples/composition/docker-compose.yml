@@ -11,7 +11,7 @@ version: "3.8"
 services:
   first:
     <<: *cdp
-    command: ["-e", "/app/pipeline-first.yaml"]
+    command: ["/app/pipeline-first.yaml"]
     ports:
       - 8000:8000
     depends_on:
@@ -27,7 +27,7 @@ services:
 
   third:
     <<: *cdp
-    command: ["-e", "/app/pipeline-third.yaml"]
+    command: ["/app/pipeline-third.yaml"]
     expose:
       - "8002"
 

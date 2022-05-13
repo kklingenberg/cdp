@@ -1,0 +1,126 @@
+---
+# This pipeline fakes two time series: 'x' and 'y', where the first
+# one has frequent events and the second one doesn't. This setup is
+# used to illustrate the use of external persistence (through Hasura
+# in this example) to implement a step that can pull past events for
+# its computation.
+
+name: "Persistence with Hasura"
+
+input:
+  generator:
+    seconds: 0.1
+
+steps:
+  # For readers: don't dwell on the first two steps too much. Mentally
+  # replace them with two real data streams of different rates.
+  make x with high probability:
+    flatmap:
+      send-receive-jq:
+        jq-expr: |-
+          .[] | if .d < 0.95 then .d else empty end
+        wrap:
+          name: "x"
+
+  make y with low probability:
+    flatmap:
+      send-receive-jq:
+        jq-expr: |-
+          .[] | if .d >= 0.95 then .d else empty end
+        wrap:
+          name: "y"
+
+  # Persist the input so that the proper pairs can be assembled
+  # afterwards, independent of the event vectors formed by CDP.
+  persist input:
+    after:
+      - make x with high probability
+      - make y with low probability
+    window:
+      events: 100
+      seconds: 3
+    reduce:
+      send-http:
+        target: http://graphql-engine:8080/v1/graphql
+        headers:
+          Content-Type: application/json
+        jq-expr: &persist-events |-
+          {
+            query: (
+              "mutation persistEvents($events: [event_insert_input!]!)" +
+              "{ insert_event(objects: $events) { returning { id } } }"
+            ),
+            variables: {events: map({
+              name: .n,
+              data: .d,
+              timestamp: (.t[-1].i | todate),
+              traces: {data: (.t | map({
+                pipeline: .p,
+                signature: .h,
+                timestamp: (.i | todate)
+              }))}
+            })},
+            operationName: "persistEvents"
+          }
+        # ensure that all persistence calls are executed before
+        # continuing with the next step
+        concurrent: 1
+
+  # Build a pair of the given value with the latest complementary
+  # value from database. This step is not directly achievable through
+  # just CDP. This is where external persistence is required, and
+  # Hasura helps us out.
+  assemble pair:
+    after:
+      - persist input
+    window:
+      events: 100
+      seconds: 1
+    reduce:
+      send-receive-http:
+        target: http://graphql-engine:8080/v1/graphql
+        headers:
+          Content-Type: application/json
+        jq-expr: |-
+          {
+            query: (
+              "query getComplementary($x: String!, $y: String!, $upTo: timestamptz!) { " +
+              "x: event(where: {timestamp: {_lte: $upTo}, name: {_eq: $x}}, " +
+              "order_by: {timestamp: desc}, limit: 1) { id name data timestamp } \n" +
+              "y: event(where: {timestamp: {_lte: $upTo}, name: {_eq: $y}}, " +
+              "order_by: {timestamp: desc}, limit: 1) { id name data timestamp } }"
+            ),
+            variables: {
+              x: "x",
+              y: "y",
+              upTo: (.[-1].t[-1].i | todate)
+            },
+            operationName: "getComplementary"
+          }
+        wrap: persisted-x-y-pair
+
+  # Add the pair of values. This is the unimaginative example of a
+  # "complex computation".
+  add values:
+    after:
+      - assemble pair
+    flatmap:
+      send-receive-jq: |-
+        .[] | if (.d.data.x | length) > 0 and (.d.data.y | length) > 0 then {
+          n: "x-plus-y",
+          d: (.d.data.x[0].data + .d.data.y[0].data)
+        } else empty end
+
+  # Persist the result of our "complex computation".
+  persist result:
+    after:
+      - add values
+    window:
+      events: 100
+      seconds: 3
+    reduce:
+      send-http:
+        target: http://graphql-engine:8080/v1/graphql
+        headers:
+          Content-Type: application/json
+        jq-expr: *persist-events

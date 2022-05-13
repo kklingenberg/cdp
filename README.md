@@ -557,6 +557,11 @@ the request is forced to `application/x-ndjson`.
 using the `jq-expr` option, the request content type cannot be
 altered.
 
+**`steps.<name>.(reduce|flatmap).send-http.concurrent`** optional
+**number** or **string**, the maximum amount of concurrent HTTP
+requests for the step. If omitted, it is set to the value of the
+`HTTP_CLIENT_DEFAULT_CONCURRENCY` environment variable or `10`.
+
 #### `expose-http`
 
 **`steps.<name>.(reduce|flatmap).expose-http`** **object**, a function

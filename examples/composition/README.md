@@ -39,6 +39,12 @@ input](/../../#poll) and execute some forwarding steps with the
 [`expose-http`](/../../#expose-http) functions. Also, events are
 logged in each step showing the pipelines they've been in.
 
+Worth noting is that the `second` and `fourth` services (and pipeline
+files) use _environment variable interpolation_, which is enabled
+using the `-e` flag. Check the
+[docker-compose.yml](docker-compose.yml) file to note the usage of
+this flag.
+
 ## Pipeline files
 
 The pipeline files are named after the docker compose services:
