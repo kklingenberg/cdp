@@ -58,6 +58,7 @@ export const make = async (
           i = 0;
         }
       }
+      await Promise.all(requests.slice(0, i));
     })();
   } else {
     const accumulatingChannel = new AsyncQueue<Event[]>().asChannel();
@@ -74,6 +75,7 @@ export const make = async (
           i = 0;
         }
       }
+      await Promise.all(requests.slice(0, i));
     })();
   }
   const queue = new AsyncQueue<Event[]>();

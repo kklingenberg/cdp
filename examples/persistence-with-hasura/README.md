@@ -25,7 +25,36 @@ docker compose down -v
 
 ## What does it do?
 
-TODO explain this.
+The example has two points of interest: the CDP program which
+illustrates interaction with a GraphQL API, and the Hasura setup.
+
+The CDP program starts with a fake data generator, which simulates two
+event streams: one with events occurring frequently, and the other
+with events occurring rarely. While real-life data streams are
+probably much less predictable (if at all), this setup is enough to
+expose a problem with CDP's core: it can't block streams while waiting
+for specific events to appear.
+
+To solve the issue this example uses an external persistence service:
+Hasura (and PostgreSQL). It first saves everything the pipeline
+receives using Hasura's API, and then pulls values from Hasura to
+perform the computation.
+
+The pipeline illustrates three key points:
+1. [The generator input form](/../../#generator) which is used to test
+   the rest of the pipeline.
+1. [`jq` filters](/../../#about-jq-expressions) used to assemble
+   [GraphQL](https://graphql.org/) requests.
+1. [The `concurrent` option of `send-http`](/../../#send-http) used
+   here to prevent paralellism and provide synchronicity between
+   pipeline steps.
+
+Aside from the pipeline, this example also shows _one way_ of
+configuring Hasura for CDP event storage. Relevant references can be
+found on the [`docker-compose.yml`](docker-compose.yml) file and the
+[`hasura`](hasura) folder. The PostgreSQL DDL for the example can be
+found on the [migration
+file](hasura/migrations/cdp/1652369701237_initial/up.sql).
 
 ## Pipeline file
 
