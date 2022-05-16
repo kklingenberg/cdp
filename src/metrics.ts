@@ -6,7 +6,7 @@ import {
   METRICS_EXPOSITION_PATH,
   METRICS_NAME_PREFIX,
 } from "./conf";
-import { makeLogger } from "./utils";
+import { makeLogger } from "./log";
 
 /**
  * A logger instance namespaced to this module.

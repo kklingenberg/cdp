@@ -11,7 +11,7 @@ import {
 } from "../event";
 import { makeHTTPServer } from "../io/http-server";
 import { isHealthy } from "../io/jq";
-import { makeLogger } from "../utils";
+import { makeLogger } from "../log";
 
 /**
  * A logger instance namespaced to this module.

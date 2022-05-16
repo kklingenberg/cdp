@@ -1,7 +1,8 @@
 import Koa from "koa";
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event } from "../event";
-import { getSignature, makeLogger, mergeHeaders } from "../utils";
+import { makeLogger } from "../log";
+import { getSignature, mergeHeaders } from "../utils";
 import { makeHTTPServer } from "../io/http-server";
 import { makeChannel } from "../io/jq";
 
