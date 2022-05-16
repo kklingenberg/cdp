@@ -1,9 +1,10 @@
 import { AsyncQueue } from "./async-queue";
 import * as deadLetter from "./dead-letter";
 import { Event } from "./event";
+import { makeLogger } from "./log";
 import { stepEvents, deadEvents as deadEventsMetric } from "./metrics";
 import { Step, StepFactory } from "./step";
-import { makeLogger, resolveAfter } from "./utils";
+import { resolveAfter } from "./utils";
 
 /**
  * A logger instance namespaced to this module.

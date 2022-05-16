@@ -1,7 +1,7 @@
 import { AsyncQueue, Channel, compose } from "./async-queue";
 import { Event } from "./event";
+import { makeLogger } from "./log";
 import { Pattern, match } from "./pattern";
-import { makeLogger } from "./utils";
 
 /**
  * A logger instance namespaced to this module.

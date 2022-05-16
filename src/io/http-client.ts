@@ -8,7 +8,8 @@ import {
   chooseParser,
   makeWrapper,
 } from "../event";
-import { makeLogger, resolveAfter, mergeHeaders } from "../utils";
+import { makeLogger } from "../log";
+import { resolveAfter, mergeHeaders } from "../utils";
 import { axiosInstance } from "./axios";
 
 /**

@@ -38,20 +38,6 @@ test("Signatures are distinct", async () => {
   expect(s2).not.toEqual(s3);
 });
 
-test("Loggers can be created according to the current log level", () => {
-  // Assumes the current log level is 'error'.
-  // This tests uses the fact that the null logger functions return
-  // null, while the active logger functions return undefined.
-  const logger = utils.makeLogger("test");
-  expect(logger.debug("this message was not expected")).toBeNull();
-  expect(logger.info("this message was not expected")).toBeNull();
-  expect(logger.warn("this message was not expected")).toBeNull();
-  expect(logger.error("this message is expected")).toBeUndefined();
-  expect(mockedConsoleError.mock.calls).toEqual([
-    ["ERROR at test:", "this message is expected"],
-  ]);
-});
-
 test("Environment variables can be replaced in objects", () => {
   const obj = {
     foo: "bar ${NODE_ENV}",

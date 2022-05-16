@@ -2,7 +2,7 @@ import { appendFile as appendFileCallback } from "fs";
 import { promisify } from "util";
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event } from "../event";
-import { makeLogger } from "../utils";
+import { makeLogger } from "../log";
 import { makeChannel } from "../io/jq";
 
 /**

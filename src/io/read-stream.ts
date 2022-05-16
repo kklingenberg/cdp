@@ -1,7 +1,7 @@
 import { Readable } from "stream";
 import { AsyncQueue } from "../async-queue";
 import { PARSE_BUFFER_SIZE } from "../conf";
-import { makeLogger } from "../utils";
+import { makeLogger } from "../log";
 
 /**
  * A logger instance namespaced to this module.

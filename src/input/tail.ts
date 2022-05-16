@@ -11,7 +11,7 @@ import {
   chooseParser,
   makeWrapper,
 } from "../event";
-import { makeLogger } from "../utils";
+import { makeLogger } from "../log";
 
 /**
  * A logger instance namespaced to this module.

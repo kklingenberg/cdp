@@ -1,6 +1,6 @@
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event, arrivalTimestamp, makeNewEventParser } from "../event";
-import { makeLogger } from "../utils";
+import { makeLogger } from "../log";
 
 /**
  * A logger instance namespaced to this module.

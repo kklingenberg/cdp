@@ -4,7 +4,7 @@ import {
   HTTP_SERVER_LISTEN_ADDRESS,
   HTTP_SERVER_LISTEN_BACKLOG,
 } from "../conf";
-import { makeLogger } from "../utils";
+import { makeLogger } from "../log";
 
 /**
  * A logger instance namespaced to this module.

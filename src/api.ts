@@ -12,6 +12,7 @@ import { make as makeTailInput } from "./input/tail";
 import { make as makeHTTPInput } from "./input/http";
 import { make as makePollInput } from "./input/poll";
 import { isHealthy } from "./io/jq";
+import { makeLogger } from "./log";
 import {
   pipelineEvents,
   stepEvents,
@@ -36,7 +37,7 @@ import { make as makeSendReceiveHTTPFunction } from "./step-functions/send-recei
 import { make as makeSendReceiveJqFunction } from "./step-functions/send-receive-jq";
 import { make as makeSendFileFunction } from "./step-functions/send-file";
 import { make as makeSendSTDOUTFunction } from "./step-functions/send-stdout";
-import { ajv, getSignature, makeLogger, resolveAfter } from "./utils";
+import { ajv, compileThrowing, getSignature, resolveAfter } from "./utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -597,6 +598,35 @@ const sendReceiveHTTPFunctionTemplateSchema = {
 };
 
 /**
+ * A step function template is one of the provided ones.
+ **/
+type StepFunctionTemplate =
+  | RenameFunctionTemplate
+  | DeduplicateFunctionTemplate
+  | KeepFunctionTemplate
+  | KeepWhenFunctionTemplate
+  | SendSTDOUTFunctionTemplate
+  | SendFileFunctionTemplate
+  | SendHTTPFunctionTemplate
+  | ExposeHTTPFunctionTemplate
+  | SendReceiveJqFunctionTemplate
+  | SendReceiveHTTPFunctionTemplate;
+const stepFunctionTemplateSchema = {
+  anyOf: [
+    renameFunctionTemplateSchema,
+    deduplicateFunctionTemplateSchema,
+    keepFunctionTemplateSchema,
+    keepWhenFunctionTemplateSchema,
+    sendSTDOUTFunctionTemplateSchema,
+    sendFileFunctionTemplateSchema,
+    sendHTTPFunctionTemplateSchema,
+    exposeHTTPFunctionTemplateSchema,
+    sendReceiveJqFunctionTemplateSchema,
+    sendReceiveHTTPFunctionTemplateSchema,
+  ],
+};
+
+/**
  * A pipeline template contains all the fields required to instantiate
  * and run a pipeline.
  */
@@ -617,28 +647,8 @@ interface PipelineTemplate {
         events: number | string;
         seconds: number | string;
       };
-      flatmap?:
-        | RenameFunctionTemplate
-        | DeduplicateFunctionTemplate
-        | KeepFunctionTemplate
-        | KeepWhenFunctionTemplate
-        | SendSTDOUTFunctionTemplate
-        | SendFileFunctionTemplate
-        | SendHTTPFunctionTemplate
-        | ExposeHTTPFunctionTemplate
-        | SendReceiveJqFunctionTemplate
-        | SendReceiveHTTPFunctionTemplate;
-      reduce?:
-        | RenameFunctionTemplate
-        | DeduplicateFunctionTemplate
-        | KeepFunctionTemplate
-        | KeepWhenFunctionTemplate
-        | SendSTDOUTFunctionTemplate
-        | SendFileFunctionTemplate
-        | SendHTTPFunctionTemplate
-        | ExposeHTTPFunctionTemplate
-        | SendReceiveJqFunctionTemplate
-        | SendReceiveHTTPFunctionTemplate;
+      flatmap?: StepFunctionTemplate;
+      reduce?: StepFunctionTemplate;
     };
   };
 }
@@ -683,34 +693,8 @@ const pipelineTemplateSchema = {
             additionalProperties: false,
             required: ["events", "seconds"],
           },
-          flatmap: {
-            anyOf: [
-              renameFunctionTemplateSchema,
-              deduplicateFunctionTemplateSchema,
-              keepFunctionTemplateSchema,
-              keepWhenFunctionTemplateSchema,
-              sendSTDOUTFunctionTemplateSchema,
-              sendFileFunctionTemplateSchema,
-              sendHTTPFunctionTemplateSchema,
-              exposeHTTPFunctionTemplateSchema,
-              sendReceiveJqFunctionTemplateSchema,
-              sendReceiveHTTPFunctionTemplateSchema,
-            ],
-          },
-          reduce: {
-            anyOf: [
-              renameFunctionTemplateSchema,
-              deduplicateFunctionTemplateSchema,
-              keepFunctionTemplateSchema,
-              keepWhenFunctionTemplateSchema,
-              sendSTDOUTFunctionTemplateSchema,
-              sendFileFunctionTemplateSchema,
-              sendHTTPFunctionTemplateSchema,
-              exposeHTTPFunctionTemplateSchema,
-              sendReceiveJqFunctionTemplateSchema,
-              sendReceiveHTTPFunctionTemplateSchema,
-            ],
-          },
+          flatmap: stepFunctionTemplateSchema,
+          reduce: stepFunctionTemplateSchema,
         },
         additionalProperties: false,
         required: [],
@@ -723,7 +707,7 @@ const pipelineTemplateSchema = {
 /**
  * Validate a raw pipeline template using the schema.
  */
-const validatePipelineTemplate = ajv.compile(pipelineTemplateSchema);
+const validatePipelineTemplate = compileThrowing(pipelineTemplateSchema);
 
 /**
  * Parses and creates a pipeline template from a raw structure. Throws
@@ -734,20 +718,14 @@ const validatePipelineTemplate = ajv.compile(pipelineTemplateSchema);
  * template.
  * @returns The freshly created pipeline template.
  */
-export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
-  if (!validatePipelineTemplate(thing)) {
-    throw new Error(
-      validatePipelineTemplate.errors
-        ?.map((error) => error.message)
-        .join("; ") ?? "pipeline file contains an invalid structure"
-    );
-  }
+export const makePipelineTemplate = (rawThing: unknown): PipelineTemplate => {
+  const thing = validatePipelineTemplate(rawThing) as PipelineTemplate;
   // Explicitly check what the schema couldn't declare as a
   // restriction.
   // 1. Check the input forms.
-  const { input } = thing as { input: object };
+  const { input } = thing;
   if ("generator" in input) {
-    const { generator } = input as { generator: object | string | null };
+    const { generator } = input;
     if (generator !== null) {
       // 1.1 Check that the event name is valid.
       const name =
@@ -779,10 +757,10 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     }
   }
   if ("poll" in input) {
-    const { poll } = input as { poll: object };
+    const { poll } = input;
     // 1.3 Check that the poll interval is valid, if given as a string.
     if (typeof poll === "object" && "seconds" in poll) {
-      const { seconds } = poll as { seconds?: number | string };
+      const { seconds } = poll;
       if (typeof seconds === "string") {
         const numericSeconds = parseFloat(seconds);
         if (numericSeconds <= 0) {
@@ -799,10 +777,10 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     }
   }
   if ("http" in input) {
-    const { http } = input as { http: object };
+    const { http } = input;
     // 1.5 Check that the input port is valid, if given as a string.
     if (typeof http === "object" && "port" in http) {
-      const { port } = http as { port: unknown };
+      const { port } = http;
       if (typeof port === "string") {
         const numericPort = parseInt(port, 10);
         if (numericPort < 1 || numericPort > 65535) {
@@ -819,7 +797,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     }
   }
   if ("tail" in input) {
-    const { tail } = input as { tail: string | object };
+    const { tail } = input;
     // 1.7 Check that the wrap directive is valid, if given.
     if (typeof tail === "object" && "wrap" in tail) {
       const { wrap } = tail as { wrap: unknown };
@@ -827,7 +805,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     }
   }
   if ("stdin" in input) {
-    const { stdin } = input as { stdin: object | null };
+    const { stdin } = input;
     // 1.8 Check that the wrap directive is valid, if given.
     if (stdin !== null && "wrap" in stdin) {
       const { wrap } = stdin as { wrap: unknown };
@@ -835,7 +813,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     }
   }
   // 2. Check each step.
-  const { steps } = thing as { steps: object };
+  const { steps } = thing;
   Object.entries(steps ?? {}).forEach(([name, definition]) => {
     // 2.1 There must be only one of either match/drop or match/pass.
     if ("match/drop" in definition && "match/pass" in definition) {
@@ -878,10 +856,11 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
       throw new Error(`step '${name}' must use one of flatmap or reduce`);
     }
     // 2.5 Check specific functions.
-    const fn = "flatmap" in definition ? definition.flatmap : definition.reduce;
+    const fn = (definition.flatmap ??
+      definition.reduce) as StepFunctionTemplate;
     // 2.5.1 If using keep-when, the value must be a proper schema.
     if ("keep-when" in fn) {
-      if (!ajv.validateSchema(fn["keep-when"])) {
+      if (!ajv.validateSchema((fn as KeepWhenFunctionTemplate)["keep-when"])) {
         throw new Error(
           `step '${name}' uses an invalid schema in keep-when: ` +
             ajv.errors?.map((error) => error.message).join("; ") ??
@@ -892,20 +871,20 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     // 2.5.2 If using rename, the replacement, prefix and suffix must
     // be valid.
     if ("rename" in fn) {
-      if ("replace" in fn.rename) {
-        if (!isValidEventName(fn.rename.replace)) {
+      if ("replace" in (fn as RenameFunctionTemplate).rename) {
+        const replace = (fn.rename as { replace: string }).replace;
+        if (!isValidEventName(replace)) {
           throw new Error(
             `step '${name}' uses an invalid rename.replace value: ` +
               "it must be a proper event name"
           );
         }
       }
-      if ("append" in fn.rename) {
+      if ("append" in (fn as RenameFunctionTemplate).rename) {
+        const append = (fn.rename as { append: string }).append;
         if (
-          (fn.rename.append.startsWith(".") &&
-            !isValidEventName(fn.rename.append.slice(1))) ||
-          (!fn.rename.append.startsWith(".") &&
-            !isValidEventName(fn.rename.append))
+          (append.startsWith(".") && !isValidEventName(append.slice(1))) ||
+          (!append.startsWith(".") && !isValidEventName(append))
         ) {
           throw new Error(
             `step '${name}' uses an invalid rename.append value: ` +
@@ -913,12 +892,11 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
           );
         }
       }
-      if ("prepend" in fn.rename) {
+      if ("prepend" in (fn as RenameFunctionTemplate).rename) {
+        const prepend = (fn.rename as { prepend: string }).prepend;
         if (
-          (fn.rename.prepend.endsWith(".") &&
-            !isValidEventName(fn.rename.prepend.slice(0, -1))) ||
-          (!fn.rename.append.endsWith(".") &&
-            !isValidEventName(fn.rename.prepend))
+          (prepend.endsWith(".") && !isValidEventName(prepend.slice(0, -1))) ||
+          (!prepend.endsWith(".") && !isValidEventName(prepend))
         ) {
           throw new Error(
             `step '${name}' uses an invalid rename.prepend value: ` +
@@ -973,7 +951,7 @@ export const makePipelineTemplate = (thing: unknown): PipelineTemplate => {
     })),
   };
   validate(dummyPipeline);
-  return thing as unknown as PipelineTemplate;
+  return thing;
 };
 
 /**

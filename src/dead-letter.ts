@@ -5,7 +5,7 @@ import {
 } from "./conf";
 import { Event } from "./event";
 import { sendEvents } from "./io/http-client";
-import { makeLogger } from "./utils";
+import { makeLogger } from "./log";
 
 /**
  * A logger instance namespaced to this module.

@@ -1,11 +1,27 @@
 import { createHash } from "crypto";
 import Ajv from "ajv";
-import { LOG_LEVEL } from "./conf";
 
 /**
  * Central Ajv instance for the whole application.
  */
 export const ajv = new Ajv();
+
+/**
+ * Compile an ajv schema into a validation function that acts as an
+ * identity function that throws on validation errors.
+ *
+ * @param schema The ajv schema to compile.
+ * @returns A validation function.
+ */
+export const compileThrowing = <T>(schema: object): ((value: T) => T) => {
+  const validate = ajv.compile(schema);
+  return (value) => {
+    if (!validate(value)) {
+      throw new Error(ajv.errorsText(validate.errors, { separator: "; " }));
+    }
+    return value;
+  };
+};
 
 /**
  * Creates a SHA-1 signature from the given arguments, which must be
@@ -41,55 +57,6 @@ export const getSignature = (...args: unknown[]): Promise<string> =>
       hash.end();
     }
   });
-
-/**
- * The shape of a logger.
- */
-export interface Logger {
-  debug: (...args: unknown[]) => void;
-  info: (...args: unknown[]) => void;
-  warn: (...args: unknown[]) => void;
-  error: (...args: unknown[]) => void;
-}
-
-/**
- * The base do-nothing logger.
- */
-const nullLogger: Logger = {
-  debug: () => null,
-  info: () => null,
-  warn: () => null,
-  error: () => null,
-};
-
-/**
- * Creates a simple logger with the specified namespace, which emits
- * messages with a namespace-specific prefix.
- *
- * @param ns The logger's namespace.
- * @returns The logger instance.
- */
-export const makeLogger = (ns: string): Logger => {
-  const levels = ["debug", "info", "warn", "error"];
-  const currentLevelIndex = Math.max(levels.indexOf(LOG_LEVEL), 0);
-  const prefix = new Map([
-    ["debug", `DEBUG at ${ns}:`],
-    ["info", `INFO  at ${ns}:`],
-    ["warn", `WARN  at ${ns}:`],
-    ["error", `ERROR at ${ns}:`],
-  ]);
-  return {
-    ...nullLogger,
-    ...Object.fromEntries(
-      levels
-        .slice(currentLevelIndex)
-        .map((level) => [
-          level,
-          (...args: unknown[]) => console.error(prefix.get(level), ...args),
-        ])
-    ),
-  };
-};
 
 /**
  * Creates a promise that resolves after the specified number of

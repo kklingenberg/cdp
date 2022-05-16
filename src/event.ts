@@ -1,8 +1,9 @@
 import { Readable } from "stream";
 import { Channel, flatMap } from "./async-queue";
-import { ajv, makeLogger } from "./utils";
-import { isValidEventName } from "./pattern";
 import { parseLines, parseJson } from "./io/read-stream";
+import { makeLogger } from "./log";
+import { isValidEventName } from "./pattern";
+import { ajv, compileThrowing } from "./utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -59,7 +60,7 @@ const serializedEventSchema = {
 /**
  * Validate a serialized event using the schema.
  */
-const validateSerializedEvent = ajv.compile(serializedEventSchema);
+const validateSerializedEvent = compileThrowing(serializedEventSchema);
 
 /**
  * Generate a construction counter value for this event.
@@ -183,14 +184,7 @@ export const makeFrom = (
  * @param raw An event to validate.
  */
 const validateRawEvent = (raw: unknown): void => {
-  if (!validateSerializedEvent(raw)) {
-    throw new Error(
-      validateSerializedEvent.errors
-        ?.map((error) => error.message)
-        .join("; ") ?? "invalid raw event"
-    );
-  }
-  const event = raw as SerializedEvent;
+  const event = validateSerializedEvent(raw) as SerializedEvent;
   if (!isValidEventName(event.n)) {
     throw new Error(`event name '${event.n}' is invalid`);
   }
@@ -361,9 +355,7 @@ export const validateWrap = (wrap: unknown, errorPrefix = "wrap"): void => {
   if (!validateWrapDirective(wrap)) {
     throw new Error(
       `${errorPrefix} is not valid: ` +
-        validateWrapDirective.errors
-          ?.map((error) => error.message)
-          .join("; ") ?? "invalid wrap directive"
+        ajv.errorsText(validateWrapDirective.errors, { separator: "; " })
     );
   }
   if (typeof wrap === "string" && !isValidEventName(wrap)) {
