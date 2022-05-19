@@ -350,8 +350,12 @@ const validateWrapDirective = ajv.compile(wrapDirectiveSchema);
  * @param wrap The wrap directive that needs validation.
  * @param errorPrefix A prefix used for the error message, emitted in
  * case the wrap directive is not valid.
+ * @returns true if it returns.
  */
-export const validateWrap = (wrap: unknown, errorPrefix = "wrap"): void => {
+export const validateWrap = (wrap: unknown, errorPrefix = "wrap"): boolean => {
+  if (typeof wrap === "undefined") {
+    return true;
+  }
   if (!validateWrapDirective(wrap)) {
     throw new Error(
       `${errorPrefix} is not valid: ` +
@@ -371,6 +375,7 @@ export const validateWrap = (wrap: unknown, errorPrefix = "wrap"): void => {
       );
     }
   }
+  return true;
 };
 
 /**
