@@ -1,4 +1,5 @@
-import { Channel, flatMap, compose } from "./async-queue";
+import { match, P } from "ts-pattern";
+import { flatMap, compose } from "./async-queue";
 import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
 import {
   Event,
@@ -967,53 +968,21 @@ export const makePipelineTemplate = (rawThing: unknown): PipelineTemplate => {
 export const runPipeline = async (
   template: PipelineTemplate
 ): Promise<[Promise<void>, () => void]> => {
+  // Setup initialization arguments.
+  const signature = await getSignature(template);
+  const ctx: [string, string] = [template.name, signature];
   // Zero pipeline metrics.
   pipelineEvents.inc({ flow: "in" }, 0);
   pipelineEvents.inc({ flow: "out" }, 0);
   deadEvents.set(0);
   // Create the input channel.
-  const signature = await getSignature(template);
-  let inputChannel: Channel<never, Event>;
-  let inputEnded: Promise<void>;
-  const inputKey = Object.keys(template.input)[0];
-  switch (inputKey) {
-    case "poll":
-      [inputChannel, inputEnded] = makePollInput(
-        template.name,
-        signature,
-        (template.input as PollInputTemplate).poll
-      );
-      break;
-    case "http":
-      [inputChannel, inputEnded] = makeHTTPInput(
-        template.name,
-        signature,
-        (template.input as HTTPInputTemplate).http
-      );
-      break;
-    case "tail":
-      [inputChannel, inputEnded] = makeTailInput(
-        template.name,
-        signature,
-        (template.input as TailInputTemplate).tail
-      );
-      break;
-    case "stdin":
-      [inputChannel, inputEnded] = makeSTDINInput(
-        template.name,
-        signature,
-        (template.input as STDINInputTemplate).stdin
-      );
-      break;
-    case "generator":
-    default:
-      [inputChannel, inputEnded] = makeGeneratorInput(
-        template.name,
-        signature,
-        (template.input as GeneratorInputTemplate).generator
-      );
-      break;
-  }
+  const [inputChannel, inputEnded] = match(template.input)
+    .with({ poll: P.select() }, (c) => makePollInput(...ctx, c))
+    .with({ http: P.select() }, (c) => makeHTTPInput(...ctx, c))
+    .with({ tail: P.select() }, (c) => makeTailInput(...ctx, c))
+    .with({ stdin: P.select() }, (c) => makeSTDINInput(...ctx, c))
+    .with({ generator: P.select() }, (c) => makeGeneratorInput(...ctx, c))
+    .exhaustive();
   // Create the pipeline channel.
   const steps: StepDefinition[] = [];
   for (const [name, definition] of Object.entries(template.steps ?? {})) {
@@ -1044,89 +1013,28 @@ export const runPipeline = async (
       patternMode,
       functionMode,
     };
-    const fnKey = Object.keys(definition[functionMode] ?? {})[0];
-    let fn;
-    switch (fnKey) {
-      case "send-receive-http":
-        fn = await makeSendReceiveHTTPFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendReceiveHTTPFunctionTemplate)[
-            "send-receive-http"
-          ]
-        );
-        break;
-      case "send-receive-jq":
-        fn = await makeSendReceiveJqFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendReceiveJqFunctionTemplate)[
-            "send-receive-jq"
-          ]
-        );
-        break;
-      case "expose-http":
-        fn = await makeExposeHTTPFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as ExposeHTTPFunctionTemplate)[
-            "expose-http"
-          ]
-        );
-        break;
-      case "send-http":
-        fn = await makeSendHTTPFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendHTTPFunctionTemplate)["send-http"]
-        );
-        break;
-      case "send-file":
-        fn = await makeSendFileFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendFileFunctionTemplate)["send-file"]
-        );
-        break;
-      case "send-stdout":
-        fn = await makeSendSTDOUTFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendSTDOUTFunctionTemplate)[
-            "send-stdout"
-          ]
-        );
-        break;
-      case "keep-when":
-        fn = await makeKeepWhenFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as KeepWhenFunctionTemplate)["keep-when"]
-        );
-        break;
-      case "deduplicate":
-        fn = await makeDeduplicateFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as DeduplicateFunctionTemplate).deduplicate
-        );
-        break;
-      case "rename":
-        fn = await makeRenameFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as RenameFunctionTemplate).rename
-        );
-        break;
-      case "keep":
-      default:
-        fn = await makeKeepFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as KeepFunctionTemplate).keep
-        );
-        break;
-    }
+    const fn = await match(definition[functionMode] as StepFunctionTemplate)
+      .with({ "send-receive-http": P.select() }, (f) =>
+        makeSendReceiveHTTPFunction(...ctx, f)
+      )
+      .with({ "send-receive-jq": P.select() }, (f) =>
+        makeSendReceiveJqFunction(...ctx, f)
+      )
+      .with({ "expose-http": P.select() }, (f) =>
+        makeExposeHTTPFunction(...ctx, f)
+      )
+      .with({ "send-http": P.select() }, (f) => makeSendHTTPFunction(...ctx, f))
+      .with({ "send-file": P.select() }, (f) => makeSendFileFunction(...ctx, f))
+      .with({ "send-stdout": P.select() }, (f) =>
+        makeSendSTDOUTFunction(...ctx, f)
+      )
+      .with({ "keep-when": P.select() }, (f) => makeKeepWhenFunction(...ctx, f))
+      .with({ deduplicate: P.select() }, (f) =>
+        makeDeduplicateFunction(...ctx, f)
+      )
+      .with({ rename: P.select() }, (f) => makeRenameFunction(...ctx, f))
+      .with({ keep: P.select() }, (f) => makeKeepFunction(...ctx, f))
+      .exhaustive();
     const factory = makeWindowed(options, fn);
     steps.push({
       name,
