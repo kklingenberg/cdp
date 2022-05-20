@@ -2,7 +2,6 @@ import { spawn, ChildProcess } from "child_process";
 import { accessSync, constants, statSync } from "fs";
 import { Readable } from "stream";
 import { AsyncQueue, Channel } from "../async-queue";
-import { chain } from "../utils";
 import { PATH } from "../conf";
 import { parseJson } from "./read-stream";
 
@@ -127,14 +126,15 @@ export const makeChannel = async <T>(
   const ended: Promise<void> = new Promise((resolve) => {
     notifyEnded = resolve;
   });
-  /* eslint-disable require-yield */
-  async function* closeStream() {
+  async function* receive() {
+    for await (const result of parseStream(child.stdout)) {
+      yield result;
+    }
     notifyEnded();
   }
-  /* eslint-enable require-yield */
   return {
     send: bufferChannel.send.bind(bufferChannel),
-    receive: chain(parseStream(child.stdout), closeStream()),
+    receive: receive(),
     close: async () => {
       await bufferChannel.close();
       await feedEnded;

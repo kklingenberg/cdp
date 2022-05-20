@@ -1,4 +1,4 @@
-import { AsyncQueue, Channel, compose } from "./async-queue";
+import { AsyncQueue, Channel, compose, drain } from "./async-queue";
 import { Event } from "./event";
 import { makeLogger } from "./log";
 import { Pattern, match } from "./pattern";
@@ -9,9 +9,10 @@ import { Pattern, match } from "./pattern";
 const logger = makeLogger("step");
 
 /**
- * A step is a channel of events.
+ * A step is a channel that takes events and does something to them,
+ * producing nothing.
  */
-export type Step = Channel<Event, Event>;
+export type Step = Channel<Event, never>;
 
 /**
  * General options for the construction of a step.
@@ -171,23 +172,16 @@ export const makeWindowed = (
   const channel = compose(fn, windowingChannel);
   return async (send) => {
     const filterOrPass = makeMatcher(options, send);
-    const operate = async () => {
-      for await (const event of channel.receive) {
-        send(event);
+    const masked = drain(
+      channel,
+      async (event: Event) => send(event),
+      async () => {
+        logger.info(`Step '${options.name}' finished operation`);
       }
-    };
-    // Start the event processing
-    operate().then(
-      () => logger.info(`Step ${options.name} finished operation`),
-      (err) =>
-        logger.warn(
-          `Step ${options.name} encountered an error during operation: ${err}`
-        )
     );
     return {
-      ...channel,
-      send: (...events: Event[]) =>
-        channel.send(...events.filter(filterOrPass)),
+      ...masked,
+      send: (...events: Event[]) => masked.send(...events.filter(filterOrPass)),
     };
   };
 };
@@ -204,21 +198,15 @@ export const makeStreamlined =
   (options: StepOptions, fn: Channel<Event, Event>): StepFactory =>
   async (send) => {
     const filterOrPass = makeMatcher(options, send);
-    const operate = async () => {
-      for await (const event of fn.receive) {
-        send(event);
+    const masked = drain(
+      fn,
+      async (event: Event) => send(event),
+      async () => {
+        logger.info(`Step '${options.name}' finished operation`);
       }
-    };
-    // Start the event processing
-    operate().then(
-      () => logger.info(`Step ${options.name} finished operation`),
-      (err) =>
-        logger.warn(
-          `Step ${options.name} encountered an error during operation: ${err}`
-        )
     );
     return {
-      ...fn,
-      send: (...events: Event[]) => fn.send(...events.filter(filterOrPass)),
+      ...masked,
+      send: (...events: Event[]) => masked.send(...events.filter(filterOrPass)),
     };
   };

@@ -1,4 +1,4 @@
-import { AsyncQueue } from "./async-queue";
+import { AsyncQueue, Channel } from "./async-queue";
 import * as deadLetter from "./dead-letter";
 import { Event } from "./event";
 import { makeLogger } from "./log";
@@ -106,7 +106,9 @@ export const validate = (pipeline: Pipeline): void => {
  * @param pipeline The pipeline to run.
  * @returns A promise yielding a channel of events.
  */
-export const run = async (pipeline: Pipeline): Promise<Step> => {
+export const run = async (
+  pipeline: Pipeline
+): Promise<Channel<Event, Event>> => {
   // Ensure the pipeline is proper.
   validate(pipeline);
   // Translate steps into integers for lighter event annotations.

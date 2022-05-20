@@ -1,5 +1,6 @@
 import axios from "axios";
 import { make } from "../../src/input/http";
+import { resolveAfter } from "../../src/utils";
 import { consume } from "../test-utils";
 
 test("The http input form works as expected", async () => {
@@ -26,7 +27,7 @@ test("The http input form works as expected", async () => {
   );
   const [output] = await Promise.all([
     consume(channel.receive),
-    channel.close(),
+    channel.close().then(() => resolveAfter(700)),
   ]);
   // Assert
   expect(sent).toEqual(false);

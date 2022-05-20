@@ -71,25 +71,6 @@ export const resolveAfter = <T>(t: number, v?: T): Promise<T> =>
   new Promise((resolve) => setTimeout(resolve, t, v));
 
 /**
- * Chains two async generators together into one.
- *
- * @param g1 The first generator to be consumed.
- * @param g2 The second generator to be consumed.
- * @returns A combined async generator.
- */
-export async function* chain<T>(
-  g1: AsyncGenerator<T>,
-  g2: AsyncGenerator<T>
-): AsyncGenerator<T> {
-  for await (const value of g1) {
-    yield value;
-  }
-  for await (const value of g2) {
-    yield value;
-  }
-}
-
-/**
  * Replace environment variable placeholders in the given thing.
  *
  * @param thing The thing to replace placeholders in.

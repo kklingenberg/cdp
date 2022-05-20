@@ -49,7 +49,9 @@ test("Expose-http works as expected", async () => {
           )
       ),
       axios.get("http://127.0.0.1:30000/loremipsum", { validateStatus: null }),
-      resolveAfter(300).then(() => channel.close()),
+      resolveAfter(300)
+        .then(() => channel.close())
+        .then(() => resolveAfter(700)),
     ]);
   // Assert
   expect(output.map((e) => e.data)).toEqual([
@@ -70,7 +72,7 @@ test("Expose-http can transform responses using a jq filter", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", {
     endpoint: "/events",
-    port: 30000,
+    port: 30010,
     responses: 2,
     "jq-expr": ".",
   });
@@ -99,8 +101,10 @@ test("Expose-http can transform responses using a jq filter", async () => {
   eventBatches.forEach((batch) => channel.send(batch));
   const [output, response] = await Promise.all([
     consume(channel.receive),
-    resolveAfter(100).then(() => axios.get("http://127.0.0.1:30000/events")),
-    resolveAfter(300).then(() => channel.close()),
+    resolveAfter(100).then(() => axios.get("http://127.0.0.1:30010/events")),
+    resolveAfter(300)
+      .then(() => channel.close())
+      .then(() => resolveAfter(700)),
   ]);
   // Assert
   expect(output.map((e) => e.data)).toEqual([

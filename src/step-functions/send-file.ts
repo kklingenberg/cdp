@@ -1,6 +1,6 @@
 import { appendFile as appendFileCallback } from "fs";
 import { promisify } from "util";
-import { Channel, AsyncQueue, flatMap } from "../async-queue";
+import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
 import { makeChannel } from "../io/jq";
@@ -34,38 +34,40 @@ export const make = async (
   options: string | { path: string; ["jq-expr"]?: string }
 ): Promise<Channel<Event[], Event>> => {
   const path = typeof options === "string" ? options : options.path;
-  let promiseChain: Promise<void> = Promise.resolve();
-  let forwarder: (events: Event[]) => void = (events: Event[]) => {
-    const output =
-      events.map((event) => JSON.stringify(event)).join("\n") + "\n";
-    promiseChain = promiseChain
-      .then(() => appendFile(path, output))
-      .catch((err) => logger.error(`Couldn't append to file ${path}: ${err}`));
-  };
-  let closeExternal: () => Promise<void> = async () => {
-    // Empty function
-  };
+  let forwarder: (events: Event[]) => void;
+  let closeExternal: () => Promise<void>;
   if (typeof options === "object" && typeof options["jq-expr"] === "string") {
-    const jqChannel: Channel<Event[], unknown> = await makeChannel(
-      options["jq-expr"]
-    );
-    forwarder = jqChannel.send.bind(jqChannel);
-    closeExternal = jqChannel.close.bind(jqChannel);
-    // Start the sending of jq output to STDOUT.
-    promiseChain = (async () => {
-      for await (const response of jqChannel.receive) {
+    const jqChannel: Channel<Event[], never> = drain(
+      await makeChannel(options["jq-expr"]),
+      async (result: unknown) => {
         try {
           await appendFile(
             path,
-            (typeof response === "string"
-              ? response
-              : JSON.stringify(response)) + "\n"
+            (typeof result === "string" ? result : JSON.stringify(result)) +
+              "\n"
           );
         } catch (err) {
           logger.error(`Couldn't append to file ${path}: ${err}`);
         }
       }
-    })();
+    );
+    forwarder = jqChannel.send.bind(jqChannel);
+    closeExternal = jqChannel.close.bind(jqChannel);
+  } else {
+    const accumulatingChannel: Channel<Event[], never> = drain(
+      new AsyncQueue<Event[]>().asChannel(),
+      async (events: Event[]) => {
+        const output =
+          events.map((event) => JSON.stringify(event)).join("\n") + "\n";
+        try {
+          await appendFile(path, output);
+        } catch (err) {
+          logger.error(`Couldn't append to file ${path}: ${err}`);
+        }
+      }
+    );
+    forwarder = accumulatingChannel.send.bind(accumulatingChannel);
+    closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
   const queue = new AsyncQueue<Event[]>();
   const forwardingChannel = flatMap(async (events: Event[]) => {
@@ -75,9 +77,8 @@ export const make = async (
   return {
     ...forwardingChannel,
     close: async () => {
-      await closeExternal();
       await forwardingChannel.close();
-      await promiseChain;
+      await closeExternal();
     },
   };
 };
