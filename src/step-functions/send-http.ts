@@ -1,4 +1,4 @@
-import { Channel, AsyncQueue, flatMap } from "../async-queue";
+import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { HTTP_CLIENT_DEFAULT_CONCURRENCY } from "../conf";
 import { Event } from "../event";
 import { sendEvents, sendThing } from "../io/http-client";
@@ -41,42 +41,40 @@ export const make = async (
       : options.concurrent ?? 10;
   let forwarder: (events: Event[]) => void;
   let closeExternal: () => Promise<void>;
+  const requests = new Array<Promise<void>>(concurrent);
+  let i = 0;
   if (typeof options !== "string" && typeof options["jq-expr"] === "string") {
-    const jqChannel: Channel<Event[], unknown> = await makeChannel(
-      options["jq-expr"]
-    );
-    forwarder = jqChannel.send.bind(jqChannel);
-    closeExternal = jqChannel.close.bind(jqChannel);
-    // Start the sending of jq to the HTTP target.
-    (async () => {
-      const requests = new Array<Promise<void>>(concurrent);
-      let i = 0;
-      for await (const response of jqChannel.receive) {
+    const jqChannel: Channel<Event[], never> = drain(
+      await makeChannel(options["jq-expr"]),
+      async (response: unknown) => {
         requests[i++] = sendThing(response, target, method, headers);
         if (i === concurrent) {
           await Promise.all(requests);
           i = 0;
         }
+      },
+      async () => {
+        await Promise.all(requests.slice(0, i));
       }
-      await Promise.all(requests.slice(0, i));
-    })();
+    );
+    forwarder = jqChannel.send.bind(jqChannel);
+    closeExternal = jqChannel.close.bind(jqChannel);
   } else {
-    const accumulatingChannel = new AsyncQueue<Event[]>().asChannel();
-    forwarder = accumulatingChannel.send.bind(accumulatingChannel);
-    closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
-    // Start the sending of jq to the HTTP target.
-    (async () => {
-      const requests = new Array<Promise<void>>(concurrent);
-      let i = 0;
-      for await (const events of accumulatingChannel.receive) {
+    const accumulatingChannel: Channel<Event[], never> = drain(
+      new AsyncQueue<Event[]>().asChannel(),
+      async (events: Event[]) => {
         requests[i++] = sendEvents(events, target, method, headers);
         if (i === concurrent) {
           await Promise.all(requests);
           i = 0;
         }
+      },
+      async () => {
+        await Promise.all(requests.slice(0, i));
       }
-      await Promise.all(requests.slice(0, i));
-    })();
+    );
+    forwarder = accumulatingChannel.send.bind(accumulatingChannel);
+    closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
   const queue = new AsyncQueue<Event[]>();
   const forwardingChannel = flatMap(async (events: Event[]) => {
@@ -86,8 +84,8 @@ export const make = async (
   return {
     ...forwardingChannel,
     close: async () => {
-      await closeExternal();
       await forwardingChannel.close();
+      await closeExternal();
     },
   };
 };

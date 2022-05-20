@@ -5,8 +5,8 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "jest --coverage",
-    "check": "jest && eslint . --ext .ts && tsc",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node16 --outdir=build",
+    "check": "jest -i && eslint . --ext .ts && tsc",
+    "build": "esbuild src/index.ts --bundle --minify --platform=node --target=node16 --outdir=build",
     "check-and-build": "npm run check && npm run build"
   },
   "repository": {
@@ -44,6 +44,7 @@
     "koa": "^2.13.4",
     "prom-client": "^14.0.1",
     "tail-file": "^1.4.15",
+    "ts-pattern": "^4.0.2",
     "yaml": "^1.10.2"
   }
 }

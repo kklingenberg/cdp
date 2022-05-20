@@ -232,6 +232,39 @@ export const flatMap = <A, B, C>(
 };
 
 /**
+ * Drains a channel, executing a side effect while draining it.
+ *
+ * @param channel The channel to drain.
+ * @param effect The procedure that generates side effects.
+ * @param finalEffect An optional procedure that executes side effects
+ * after the channel is depleted.
+ * @returns A self-draining channel that never produces values.
+ */
+export const drain = <A, B>(
+  channel: Channel<A, B>,
+  effect: (value: B) => Promise<void>,
+  finalEffect?: () => Promise<void>
+): Channel<A, never> => {
+  const masked = flatMap(async (value: B) => {
+    await effect(value);
+    return [];
+  }, channel);
+  const drained: Promise<void> = masked.receive.next().then(
+    finalEffect ??
+      (() => {
+        // nothing
+      })
+  );
+  return {
+    ...masked,
+    close: async () => {
+      await masked.close();
+      await drained;
+    },
+  };
+};
+
+/**
  * Composes channels as if using the function composition
  * combinator: compose(f, g)(x) = f(g(x))
  *
@@ -243,44 +276,15 @@ export const compose = <A, B, C>(
   c1: Channel<B, C>,
   c2: Channel<A, B>
 ): Channel<A, C> => {
-  async function* composed() {
-    const eventSlice: [
-      Promise<{ x: IteratorResult<B | C>; yields: boolean }> | null,
-      Promise<{ x: IteratorResult<B | C>; yields: boolean }> | null
-    ] = [
-      c1.receive.next().then((x) => ({ x, yields: true })),
-      c2.receive.next().then((x) => ({ x, yields: false })),
-    ];
-    while (eventSlice[0] !== null || eventSlice[1] !== null) {
-      const {
-        x: { done, value },
-        yields,
-      } = await Promise.race(
-        eventSlice.filter((p) => p !== null) as Promise<{
-          x: IteratorResult<B | C>;
-          yields: boolean;
-        }>[]
-      );
-      if (done) {
-        eventSlice[yields ? 0 : 1] = null;
-      } else {
-        eventSlice[yields ? 0 : 1] = (yields ? c1 : c2).receive
-          .next()
-          .then((x) => ({ x, yields }));
-        if (yields) {
-          yield value;
-        } else {
-          c1.send(value);
-        }
-      }
-    }
-  }
-  return {
-    send: c2.send.bind(c2),
-    receive: composed(),
-    close: async () => {
-      await c2.close();
-      await c1.close();
+  const masked = drain(
+    c2,
+    async (value: B) => {
+      c1.send(value);
     },
+    () => c1.close()
+  );
+  return {
+    ...masked,
+    receive: c1.receive,
   };
 };

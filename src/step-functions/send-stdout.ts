@@ -1,4 +1,4 @@
-import { Channel, AsyncQueue, flatMap } from "../async-queue";
+import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeChannel } from "../io/jq";
 
@@ -26,19 +26,16 @@ export const make = async (
     // Empty function
   };
   if (options !== null && typeof options["jq-expr"] === "string") {
-    const jqChannel: Channel<Event[], unknown> = await makeChannel(
-      options["jq-expr"]
+    const jqChannel: Channel<Event[], never> = drain(
+      await makeChannel(options["jq-expr"]),
+      async (result: unknown) => {
+        console.log(
+          typeof result === "string" ? result : JSON.stringify(result)
+        );
+      }
     );
     forwarder = jqChannel.send.bind(jqChannel);
     closeExternal = jqChannel.close.bind(jqChannel);
-    // Start the sending of jq output to STDOUT.
-    (async () => {
-      for await (const response of jqChannel.receive) {
-        console.log(
-          typeof response === "string" ? response : JSON.stringify(response)
-        );
-      }
-    })();
   }
   const queue = new AsyncQueue<Event[]>();
   const forwardingChannel = flatMap(async (events: Event[]) => {
@@ -48,8 +45,8 @@ export const make = async (
   return {
     ...forwardingChannel,
     close: async () => {
-      await closeExternal();
       await forwardingChannel.close();
+      await closeExternal();
     },
   };
 };

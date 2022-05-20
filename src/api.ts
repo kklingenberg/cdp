@@ -1,4 +1,5 @@
-import { Channel, flatMap, compose } from "./async-queue";
+import { match, P } from "ts-pattern";
+import { flatMap, compose } from "./async-queue";
 import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
 import {
   Event,
@@ -224,6 +225,25 @@ const pollInputTemplateSchema = {
   },
   additionalProperties: false,
   required: ["poll"],
+};
+
+/**
+ * An input template is one of the provided ones.
+ **/
+type InputTemplate =
+  | GeneratorInputTemplate
+  | STDINInputTemplate
+  | TailInputTemplate
+  | HTTPInputTemplate
+  | PollInputTemplate;
+const inputTemplateSchema = {
+  anyOf: [
+    generatorInputTemplateSchema,
+    stdinInputTemplateSchema,
+    tailInputTemplateSchema,
+    httpInputTemplateSchema,
+    pollInputTemplateSchema,
+  ],
 };
 
 /**
@@ -632,12 +652,7 @@ const stepFunctionTemplateSchema = {
  */
 interface PipelineTemplate {
   name: string;
-  input:
-    | GeneratorInputTemplate
-    | STDINInputTemplate
-    | TailInputTemplate
-    | HTTPInputTemplate
-    | PollInputTemplate;
+  input: InputTemplate;
   steps?: {
     [key: string]: {
       after?: string[];
@@ -656,15 +671,7 @@ const pipelineTemplateSchema = {
   type: "object",
   properties: {
     name: { type: "string", minLength: 1 },
-    input: {
-      anyOf: [
-        generatorInputTemplateSchema,
-        stdinInputTemplateSchema,
-        tailInputTemplateSchema,
-        httpInputTemplateSchema,
-        pollInputTemplateSchema,
-      ],
-    },
+    input: inputTemplateSchema,
     steps: {
       type: "object",
       properties: {},
@@ -710,6 +717,16 @@ const pipelineTemplateSchema = {
 const validatePipelineTemplate = compileThrowing(pipelineTemplateSchema);
 
 /**
+ * Extract the type of ts-pattern's match objects for boolean returns.
+ */
+class BooleanMatchTypeExtractor<T> {
+  wrappedMatch(v: T) {
+    return match<T, boolean>(v);
+  }
+}
+type BooleanMatch<T> = ReturnType<BooleanMatchTypeExtractor<T>["wrappedMatch"]>;
+
+/**
  * Parses and creates a pipeline template from a raw structure. Throws
  * an error with an explanation message in case the given structure
  * can't be translated into a pipeline template.
@@ -722,229 +739,158 @@ export const makePipelineTemplate = (rawThing: unknown): PipelineTemplate => {
   const thing = validatePipelineTemplate(rawThing) as PipelineTemplate;
   // Explicitly check what the schema couldn't declare as a
   // restriction.
+  const check = <T>(m: BooleanMatch<T>, message?: string): void => {
+    if (!m.otherwise(() => true)) {
+      throw new Error(message ?? "validation error");
+    }
+  };
   // 1. Check the input forms.
-  const { input } = thing;
-  if ("generator" in input) {
-    const { generator } = input;
-    if (generator !== null) {
-      // 1.1 Check that the event name is valid.
-      const name =
-        typeof generator === "string"
-          ? generator
-          : (generator as { name?: string }).name;
-      if (typeof name === "string" && !isValidEventName(name)) {
-        throw new Error(
-          "the input has an invalid value for generator.name: " +
-            "it must be a proper event name"
-        );
-      }
-    }
-    // 1.2 Check that the interval is valid, if given as a string.
-    if (
-      generator !== null &&
-      typeof generator !== "string" &&
-      "seconds" in generator
-    ) {
-      const { seconds } = generator as { seconds?: number | string };
-      if (typeof seconds === "string") {
-        const numericSeconds = parseFloat(seconds);
-        if (numericSeconds <= 0) {
-          throw new Error(
-            `the input has an invalid value for generator.seconds (must be > 0)`
-          );
-        }
-      }
-    }
-  }
-  if ("poll" in input) {
-    const { poll } = input;
-    // 1.3 Check that the poll interval is valid, if given as a string.
-    if (typeof poll === "object" && "seconds" in poll) {
-      const { seconds } = poll;
-      if (typeof seconds === "string") {
-        const numericSeconds = parseFloat(seconds);
-        if (numericSeconds <= 0) {
-          throw new Error(
-            `the input has an invalid value for poll.seconds (must be > 0)`
-          );
-        }
-      }
-    }
-    // 1.4 Check that the wrap directive is valid, if given.
-    if (typeof poll === "object" && "wrap" in poll) {
-      const { wrap } = poll as { wrap: unknown };
-      validateWrap(wrap, "the input's wrap option");
-    }
-  }
-  if ("http" in input) {
-    const { http } = input;
-    // 1.5 Check that the input port is valid, if given as a string.
-    if (typeof http === "object" && "port" in http) {
-      const { port } = http;
-      if (typeof port === "string") {
-        const numericPort = parseInt(port, 10);
-        if (numericPort < 1 || numericPort > 65535) {
-          throw new Error(
-            "the input's http port is invalid (must be between 1 and 65535, inclusive)"
-          );
-        }
-      }
-    }
-    // 1.6 Check that the wrap directive is valid, if given.
-    if (typeof http === "object" && "wrap" in http) {
-      const { wrap } = http as { wrap: unknown };
-      validateWrap(wrap, "the input's wrap option");
-    }
-  }
-  if ("tail" in input) {
-    const { tail } = input;
-    // 1.7 Check that the wrap directive is valid, if given.
-    if (typeof tail === "object" && "wrap" in tail) {
-      const { wrap } = tail as { wrap: unknown };
-      validateWrap(wrap, "the input's wrap option");
-    }
-  }
-  if ("stdin" in input) {
-    const { stdin } = input;
-    // 1.8 Check that the wrap directive is valid, if given.
-    if (stdin !== null && "wrap" in stdin) {
-      const { wrap } = stdin as { wrap: unknown };
-      validateWrap(wrap, "the input's wrap option");
-    }
-  }
+  const matchInput = match(thing.input);
+  check(
+    matchInput.with({ generator: P.select(P.string) }, isValidEventName),
+    "the input has an invalid value for generator.name: " +
+      "it must be a proper event name"
+  );
+  check(
+    matchInput.with(
+      { generator: { name: P.select(P.string) } },
+      isValidEventName
+    ),
+    "the input has an invalid value for generator.name: " +
+      "it must be a proper event name"
+  );
+  check(
+    matchInput.with(
+      { generator: { seconds: P.select(P.string) } },
+      (seconds) => parseFloat(seconds) > 0
+    ),
+    "the input has an invalid value for generator.seconds (must be > 0)"
+  );
+  check(
+    matchInput.with({ stdin: { wrap: P.select() } }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
+  check(
+    matchInput.with({ tail: { wrap: P.select() } }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
+  check(
+    matchInput.with({ http: { port: P.select(P.string) } }, (rawPort) =>
+      ((port) => port >= 1 && port <= 65535)(parseInt(rawPort, 10))
+    ),
+    "the input's http port is invalid (must be between 1 and 65535, inclusive)"
+  );
+  check(
+    matchInput.with({ http: { wrap: P.select() } }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
+  check(
+    matchInput.with(
+      { poll: { seconds: P.select(P.string) } },
+      (seconds) => parseFloat(seconds) > 0
+    ),
+    "the input has an invalid value for poll.seconds (must be > 0)"
+  );
+  check(
+    matchInput.with({ poll: { wrap: P.select() } }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
   // 2. Check each step.
-  const { steps } = thing;
-  Object.entries(steps ?? {}).forEach(([name, definition]) => {
-    // 2.1 There must be only one of either match/drop or match/pass.
-    if ("match/drop" in definition && "match/pass" in definition) {
-      throw new Error(
-        `step '${name}' can't use both match/drop and match/pass`
-      );
-    }
-    // 2.2 The pattern used must be valid.
-    if (
-      "match/drop" in definition &&
-      !isValidPattern(definition["match/drop"])
-    ) {
-      throw new Error(`step '${name}' has an invalid pattern under match/drop`);
-    }
-    if (
-      "match/pass" in definition &&
-      !isValidPattern(definition["match/pass"])
-    ) {
-      throw new Error(`step '${name}' has an invalid pattern under match/pass`);
-    }
-    // 2.3 Window parameters, if given as strings, must be properly bound.
-    if ("window" in definition) {
-      const { window } = definition as {
-        window: { seconds: unknown };
-      };
-      if (typeof window.seconds === "string") {
-        const numericSeconds = parseFloat(window.seconds);
-        if (numericSeconds <= 0) {
-          throw new Error(
-            `step '${name}' has an invalid value for window.seconds (must be > 0)`
-          );
-        }
-      }
-    }
-    // 2.4 There must be only one of either flatmap or reduce.
-    if ("flatmap" in definition && "reduce" in definition) {
-      throw new Error(`step '${name}' can't use both flatmap and reduce`);
-    }
-    if (!("flatmap" in definition || "reduce" in definition)) {
-      throw new Error(`step '${name}' must use one of flatmap or reduce`);
-    }
-    // 2.5 Check specific functions.
-    const fn = (definition.flatmap ??
-      definition.reduce) as StepFunctionTemplate;
-    // 2.5.1 If using keep-when, the value must be a proper schema.
-    if ("keep-when" in fn) {
-      if (!ajv.validateSchema((fn as KeepWhenFunctionTemplate)["keep-when"])) {
-        throw new Error(
-          `step '${name}' uses an invalid schema in keep-when: ` +
-            ajv.errors?.map((error) => error.message).join("; ") ??
-            "invalid schema"
-        );
-      }
-    }
-    // 2.5.2 If using rename, the replacement, prefix and suffix must
-    // be valid.
-    if ("rename" in fn) {
-      if ("replace" in (fn as RenameFunctionTemplate).rename) {
-        const replace = (fn.rename as { replace: string }).replace;
-        if (!isValidEventName(replace)) {
-          throw new Error(
-            `step '${name}' uses an invalid rename.replace value: ` +
-              "it must be a proper event name"
-          );
-        }
-      }
-      if ("append" in (fn as RenameFunctionTemplate).rename) {
-        const append = (fn.rename as { append: string }).append;
-        if (
-          (append.startsWith(".") && !isValidEventName(append.slice(1))) ||
-          (!append.startsWith(".") && !isValidEventName(append))
-        ) {
-          throw new Error(
-            `step '${name}' uses an invalid rename.append value: ` +
-              "it must be a proper event name suffix"
-          );
-        }
-      }
-      if ("prepend" in (fn as RenameFunctionTemplate).rename) {
-        const prepend = (fn.rename as { prepend: string }).prepend;
-        if (
-          (prepend.endsWith(".") && !isValidEventName(prepend.slice(0, -1))) ||
-          (!prepend.endsWith(".") && !isValidEventName(prepend))
-        ) {
-          throw new Error(
-            `step '${name}' uses an invalid rename.prepend value: ` +
-              "it must be a proper event name prefix"
-          );
-        }
-      }
-    }
-    // 2.5.3 If using expose-http, the port must be valid if given as a string.
-    if ("expose-http" in fn) {
-      if (typeof fn["expose-http"].port === "string") {
-        const numericPort = parseInt(fn["expose-http"].port, 10);
-        if (numericPort < 1 || numericPort > 65535) {
-          throw new Error(
-            `step '${name}' uses an invalid expose-http.port value ` +
-              "(must be between 1 and 65535, inclusive)"
-          );
-        }
-      }
-    }
-    // 2.5.4 If using send-receive-jq or send-receive-http, check that
-    // the wrap option is valid, if given.
-    if ("send-receive-jq" in fn) {
-      if (typeof fn["send-receive-jq"] !== "string") {
-        if (typeof fn["send-receive-jq"].wrap !== "undefined") {
-          validateWrap(
-            fn["send-receive-jq"].wrap,
-            `step '${name}' wrap option`
-          );
-        }
-      }
-    }
-    if ("send-receive-http" in fn) {
-      if (typeof fn["send-receive-http"] !== "string") {
-        if (typeof fn["send-receive-http"].wrap !== "undefined") {
-          validateWrap(
-            fn["send-receive-http"].wrap,
-            `step '${name}' wrap option`
-          );
-        }
-      }
-    }
+  Object.entries(thing.steps ?? {}).forEach(([name, definition]) => {
+    const matchStep = match(definition);
+    check(
+      matchStep.with({ "match/drop": P._, "match/pass": P._ }, () => false),
+      `step '${name}' can't use both match/drop and match/pass`
+    );
+    check(
+      matchStep.with({ "match/drop": P.select() }, isValidPattern),
+      `step '${name}' has an invalid pattern under match/drop`
+    );
+    check(
+      matchStep.with({ "match/pass": P.select() }, isValidPattern),
+      `step '${name}' has an invalid pattern under match/pass`
+    );
+    check(
+      matchStep.with(
+        { window: { seconds: P.select(P.string) } },
+        (seconds) => parseFloat(seconds) > 0
+      ),
+      `step '${name}' has an invalid value for window.seconds (must be > 0)`
+    );
+    check(
+      matchStep.with({ flatmap: P._, reduce: P._ }, () => false),
+      `step '${name}' can't use both flatmap and reduce`
+    );
+    check(
+      matchStep
+        .with({ flatmap: P._ }, () => true)
+        .with({ reduce: P._ }, () => true)
+        .with({}, () => false),
+      `step '${name}' must use one of flatmap or reduce`
+    );
+    // 2.1 Check specific functions.
+    const matchFn = match(
+      (definition.flatmap ?? definition.reduce) as StepFunctionTemplate
+    );
+    check(
+      matchFn.with(
+        { "keep-when": P.select() },
+        (schema) => !!ajv.validateSchema(schema)
+      ),
+      `step '${name}' uses an invalid schema in keep-when`
+    );
+    check(
+      matchFn.with({ rename: { replace: P.select() } }, isValidEventName),
+      `step '${name}' uses an invalid rename.replace value: ` +
+        "it must be a proper event name"
+    );
+    check(
+      matchFn.with(
+        { rename: { append: P.select(P.string) } },
+        (append) =>
+          (append.startsWith(".") && isValidEventName(append.slice(1))) ||
+          isValidEventName(append)
+      ),
+      `step '${name}' uses an invalid rename.append value: ` +
+        "it must be a proper event name suffix"
+    );
+    check(
+      matchFn.with(
+        { rename: { prepend: P.select(P.string) } },
+        (prepend) =>
+          (prepend.endsWith(".") && isValidEventName(prepend.slice(0, -1))) ||
+          isValidEventName(prepend)
+      ),
+      `step '${name}' uses an invalid rename.prepend value: ` +
+        "it must be a proper event name prefix"
+    );
+    check(
+      matchFn.with({ "expose-http": { port: P.select(P.string) } }, (rawPort) =>
+        ((port) => port >= 1 && port <= 65535)(parseInt(rawPort, 10))
+      ),
+      `step '${name}' uses an invalid expose-http.port value ` +
+        "(must be between 1 and 65535, inclusive)"
+    );
+    check(
+      matchFn.with({ "send-receive-jq": { wrap: P.select() } }, (wrap) =>
+        validateWrap(wrap, `step '${name}' wrap option`)
+      )
+    );
+    check(
+      matchFn.with({ "send-receive-http": { wrap: P.select() } }, (wrap) =>
+        validateWrap(wrap, `step '${name}' wrap option`)
+      )
+    );
   });
   // 3. Check the pipeline's graph soundness.
   const dummyStepFactory = () => Promise.reject("not a real step factory");
   const dummyPipeline: Pipeline = {
     name: `${thing.name} -- validation`,
-    steps: Object.entries(steps ?? {}).map(([name, definition]) => ({
+    steps: Object.entries(thing.steps ?? {}).map(([name, definition]) => ({
       name,
       after: definition.after ?? [],
       factory: dummyStepFactory,
@@ -967,53 +913,21 @@ export const makePipelineTemplate = (rawThing: unknown): PipelineTemplate => {
 export const runPipeline = async (
   template: PipelineTemplate
 ): Promise<[Promise<void>, () => void]> => {
+  // Setup initialization arguments.
+  const signature = await getSignature(template);
+  const ctx: [string, string] = [template.name, signature];
   // Zero pipeline metrics.
   pipelineEvents.inc({ flow: "in" }, 0);
   pipelineEvents.inc({ flow: "out" }, 0);
   deadEvents.set(0);
   // Create the input channel.
-  const signature = await getSignature(template);
-  let inputChannel: Channel<never, Event>;
-  let inputEnded: Promise<void>;
-  const inputKey = Object.keys(template.input)[0];
-  switch (inputKey) {
-    case "poll":
-      [inputChannel, inputEnded] = makePollInput(
-        template.name,
-        signature,
-        (template.input as PollInputTemplate).poll
-      );
-      break;
-    case "http":
-      [inputChannel, inputEnded] = makeHTTPInput(
-        template.name,
-        signature,
-        (template.input as HTTPInputTemplate).http
-      );
-      break;
-    case "tail":
-      [inputChannel, inputEnded] = makeTailInput(
-        template.name,
-        signature,
-        (template.input as TailInputTemplate).tail
-      );
-      break;
-    case "stdin":
-      [inputChannel, inputEnded] = makeSTDINInput(
-        template.name,
-        signature,
-        (template.input as STDINInputTemplate).stdin
-      );
-      break;
-    case "generator":
-    default:
-      [inputChannel, inputEnded] = makeGeneratorInput(
-        template.name,
-        signature,
-        (template.input as GeneratorInputTemplate).generator
-      );
-      break;
-  }
+  const [inputChannel, inputEnded] = match(template.input)
+    .with({ poll: P.select() }, (c) => makePollInput(...ctx, c))
+    .with({ http: P.select() }, (c) => makeHTTPInput(...ctx, c))
+    .with({ tail: P.select() }, (c) => makeTailInput(...ctx, c))
+    .with({ stdin: P.select() }, (c) => makeSTDINInput(...ctx, c))
+    .with({ generator: P.select() }, (c) => makeGeneratorInput(...ctx, c))
+    .exhaustive();
   // Create the pipeline channel.
   const steps: StepDefinition[] = [];
   for (const [name, definition] of Object.entries(template.steps ?? {})) {
@@ -1044,89 +958,28 @@ export const runPipeline = async (
       patternMode,
       functionMode,
     };
-    const fnKey = Object.keys(definition[functionMode] ?? {})[0];
-    let fn;
-    switch (fnKey) {
-      case "send-receive-http":
-        fn = await makeSendReceiveHTTPFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendReceiveHTTPFunctionTemplate)[
-            "send-receive-http"
-          ]
-        );
-        break;
-      case "send-receive-jq":
-        fn = await makeSendReceiveJqFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendReceiveJqFunctionTemplate)[
-            "send-receive-jq"
-          ]
-        );
-        break;
-      case "expose-http":
-        fn = await makeExposeHTTPFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as ExposeHTTPFunctionTemplate)[
-            "expose-http"
-          ]
-        );
-        break;
-      case "send-http":
-        fn = await makeSendHTTPFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendHTTPFunctionTemplate)["send-http"]
-        );
-        break;
-      case "send-file":
-        fn = await makeSendFileFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendFileFunctionTemplate)["send-file"]
-        );
-        break;
-      case "send-stdout":
-        fn = await makeSendSTDOUTFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as SendSTDOUTFunctionTemplate)[
-            "send-stdout"
-          ]
-        );
-        break;
-      case "keep-when":
-        fn = await makeKeepWhenFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as KeepWhenFunctionTemplate)["keep-when"]
-        );
-        break;
-      case "deduplicate":
-        fn = await makeDeduplicateFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as DeduplicateFunctionTemplate).deduplicate
-        );
-        break;
-      case "rename":
-        fn = await makeRenameFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as RenameFunctionTemplate).rename
-        );
-        break;
-      case "keep":
-      default:
-        fn = await makeKeepFunction(
-          template.name,
-          signature,
-          (definition[functionMode] as KeepFunctionTemplate).keep
-        );
-        break;
-    }
+    const fn = await match(definition[functionMode] as StepFunctionTemplate)
+      .with({ "send-receive-http": P.select() }, (f) =>
+        makeSendReceiveHTTPFunction(...ctx, f)
+      )
+      .with({ "send-receive-jq": P.select() }, (f) =>
+        makeSendReceiveJqFunction(...ctx, f)
+      )
+      .with({ "expose-http": P.select() }, (f) =>
+        makeExposeHTTPFunction(...ctx, f)
+      )
+      .with({ "send-http": P.select() }, (f) => makeSendHTTPFunction(...ctx, f))
+      .with({ "send-file": P.select() }, (f) => makeSendFileFunction(...ctx, f))
+      .with({ "send-stdout": P.select() }, (f) =>
+        makeSendSTDOUTFunction(...ctx, f)
+      )
+      .with({ "keep-when": P.select() }, (f) => makeKeepWhenFunction(...ctx, f))
+      .with({ deduplicate: P.select() }, (f) =>
+        makeDeduplicateFunction(...ctx, f)
+      )
+      .with({ rename: P.select() }, (f) => makeRenameFunction(...ctx, f))
+      .with({ keep: P.select() }, (f) => makeKeepFunction(...ctx, f))
+      .exhaustive();
     const factory = makeWindowed(options, fn);
     steps.push({
       name,

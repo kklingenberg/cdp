@@ -1,9 +1,10 @@
-import { AsyncQueue } from "../src/async-queue";
+import { AsyncQueue, drain } from "../src/async-queue";
 import { Event } from "../src/event";
 import { INPUT_ALIAS, validate } from "../src/pipeline";
 
 // This mock is used to prepare dummy pipelines.
-const dummyStepFactory = async () => new AsyncQueue<Event>().asChannel();
+const dummyStepFactory = async () =>
+  drain(new AsyncQueue<Event>().asChannel(), () => Promise.resolve());
 
 // Tests start here.
 
