@@ -1,6 +1,6 @@
 {
   "name": "cdp",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Composable Data Pipelines",
   "main": "src/index.ts",
   "scripts": {
@@ -28,12 +28,12 @@
   "devDependencies": {
     "@types/jest": "^27.5.1",
     "@types/koa": "^2.13.4",
-    "@typescript-eslint/eslint-plugin": "^5.24.0",
-    "@typescript-eslint/parser": "^5.24.0",
+    "@typescript-eslint/eslint-plugin": "^5.25.0",
+    "@typescript-eslint/parser": "^5.25.0",
     "esbuild": "^0.14.39",
     "eslint": "^8.15.0",
     "jest": "^27.5.1",
-    "ts-jest": "^27.1.4",
+    "ts-jest": "^27.1.5",
     "typescript": "^4.6.4"
   },
   "dependencies": {
