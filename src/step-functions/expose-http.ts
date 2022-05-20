@@ -1,5 +1,5 @@
 import Koa from "koa";
-import { Channel, AsyncQueue, flatMap } from "../async-queue";
+import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
 import { getSignature, mergeHeaders } from "../utils";
@@ -132,20 +132,22 @@ export const make = async (
 
   let responsesChannel: Channel<Event[], never>;
   if (typeof options["jq-expr"] === "string") {
-    responsesChannel = flatMap(async (thing: unknown) => {
-      const [key, response] = await makeGenericResponse(thing);
-      registerResponse(key, response);
-      return [];
-    }, await makeChannel(options["jq-expr"]));
+    responsesChannel = drain(
+      await makeChannel(options["jq-expr"]),
+      async (thing: unknown) => {
+        const [key, response] = await makeGenericResponse(thing);
+        registerResponse(key, response);
+      }
+    );
   } else {
-    responsesChannel = flatMap(async (events: Event[]) => {
-      const [key, response] = await makeEventWindowResponse(events);
-      registerResponse(key, response);
-      return [];
-    }, new AsyncQueue<Event[]>().asChannel());
+    responsesChannel = drain(
+      new AsyncQueue<Event[]>().asChannel(),
+      async (events: Event[]) => {
+        const [key, response] = await makeEventWindowResponse(events);
+        registerResponse(key, response);
+      }
+    );
   }
-  // Start draining the responses. Only the final yield is expected.
-  responsesChannel.receive.next();
 
   const makeLink = (ctx: Koa.Context, key: string) => {
     const path = `${endpoint}/${key}/`;
