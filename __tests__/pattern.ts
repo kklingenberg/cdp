@@ -24,6 +24,7 @@ test("Star-wildcard pattern matches correctly", () => {
 
 test("Hash-wildcard pattern matches zero occurrences", () => {
   expect(pattern.match("foo.bar.baz", "#.foo.bar.baz")).toBe(true);
+  expect(pattern.match("foo", "foo.#")).toBe(true);
 });
 
 test("Hash-wildcard pattern matches many occurrences", () => {

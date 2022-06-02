@@ -147,6 +147,7 @@ const wordsMatchPatternWords = (
   sWords: string[],
   pWords: string[]
 ): boolean => {
+  if (pWords.length === 1 && pWords[0] === multipleWordWildCard) return true;
   if (sWords.length === 0 && pWords.length === 0) return true;
   if (sWords.length === 0 || pWords.length === 0) return false;
   const [sWord, ...sRest] = sWords;
