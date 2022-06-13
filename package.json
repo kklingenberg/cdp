@@ -37,6 +37,7 @@
     "typescript": "^4.6.4"
   },
   "dependencies": {
+    "@redis/client": "^1.1.0",
     "agentkeepalive": "^4.2.1",
     "ajv": "^8.11.0",
     "axios": "^0.26.1",

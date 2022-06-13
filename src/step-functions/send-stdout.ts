@@ -3,6 +3,30 @@ import { Event } from "../event";
 import { makeChannel } from "../io/jq";
 
 /**
+ * Options for this function.
+ */
+export type SendSTDOUTFunctionOptions = {
+  ["jq-expr"]?: string;
+} | null;
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    {
+      type: "object",
+      properties: {
+        "jq-expr": { type: "string", minLength: 1 },
+      },
+      additionalProperties: false,
+      required: [],
+    },
+    { type: "null" },
+  ],
+};
+
+/**
  * Function that sends events to STDOUT and forwards them to the
  * pipeline.
  *
@@ -18,7 +42,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  options: { ["jq-expr"]?: string } | null
+  options: SendSTDOUTFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   let forwarder: (events: Event[]) => void = (events: Event[]) =>
     events.forEach((event) => console.log(JSON.stringify(event)));

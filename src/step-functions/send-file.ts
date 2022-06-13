@@ -17,6 +17,34 @@ const appendFile: (path: string, data: string) => Promise<void> =
 const logger = makeLogger("step-functions/send-file");
 
 /**
+ * Options for this function.
+ */
+export type SendFileFunctionOptions =
+  | string
+  | {
+      path: string;
+      ["jq-expr"]?: string;
+    };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        path: { type: "string", minLength: 1 },
+        "jq-expr": { type: "string", minLength: 1 },
+      },
+      additionalProperties: false,
+      required: ["path"],
+    },
+  ],
+};
+
+/**
  * Function that appends events to a file and forwards them to the
  * pipeline.
  *
@@ -31,7 +59,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  options: string | { path: string; ["jq-expr"]?: string }
+  options: SendFileFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const path = typeof options === "string" ? options : options.path;
   let forwarder: (events: Event[]) => void;

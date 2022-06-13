@@ -2,6 +2,41 @@ import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event, makeFrom } from "../event";
 
 /**
+ * Options for this function.
+ */
+export type RenameFunctionOptions =
+  | {
+      append?: string;
+      prepend?: string;
+    }
+  | { replace: string };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    {
+      type: "object",
+      properties: {
+        append: { type: "string", minLength: 1 },
+        prepend: { type: "string", minLength: 1 },
+      },
+      additionalProperties: false,
+      required: [],
+    },
+    {
+      type: "object",
+      properties: {
+        replace: { type: "string", minLength: 1 },
+      },
+      additionalProperties: false,
+      required: ["replace"],
+    },
+  ],
+};
+
+/**
  * Function that renames events according to the specified options.
  *
  * @param pipelineName The name of the pipeline.
@@ -14,7 +49,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  options: { append?: string; prepend?: string } | { replace: string }
+  options: RenameFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const makeNewName: (name: string) => string =
     "replace" in options

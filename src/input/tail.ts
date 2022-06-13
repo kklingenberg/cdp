@@ -8,6 +8,7 @@ import {
   makeNewEventParser,
   parseChannel,
   WrapDirective,
+  wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
 } from "../event";
@@ -17,6 +18,32 @@ import { makeLogger } from "../log";
  * A logger instance namespaced to this module.
  */
 const logger = makeLogger("input/tail");
+
+/**
+ * Options for this input form.
+ */
+export type TailInputOptions =
+  | string
+  | { path: string; ["start-at"]?: "start" | "end"; wrap?: WrapDirective };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        path: { type: "string", minLength: 1 },
+        "start-at": { enum: ["start", "end"] },
+        wrap: wrapDirectiveSchema,
+      },
+      additionalProperties: false,
+      required: ["path"],
+    },
+  ],
+};
 
 /**
  * Creates an input channel based on data coming from a file. Returns
@@ -34,9 +61,7 @@ const logger = makeLogger("input/tail");
 export const make = (
   pipelineName: string,
   pipelineSignature: string,
-  options:
-    | string
-    | { path: string; ["start-at"]?: "start" | "end"; wrap?: WrapDirective }
+  options: TailInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
   const parse = chooseParser(
     (typeof options === "string" ? {} : options)?.wrap

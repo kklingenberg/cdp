@@ -3,6 +3,34 @@ import { getSignature } from "../utils";
 import { Event } from "../event";
 
 /**
+ * Options for this function.
+ */
+export type DeduplicateFunctionOptions = {
+  ["consider-name"]?: boolean;
+  ["consider-data"]?: boolean;
+  ["consider-trace"]?: boolean;
+} | null;
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    {
+      type: "object",
+      properties: {
+        "consider-name": { type: "boolean" },
+        "consider-data": { type: "boolean" },
+        "consider-trace": { type: "boolean" },
+      },
+      additionalProperties: false,
+      required: [],
+    },
+    { type: "null" },
+  ],
+};
+
+/**
  * Remove duplicate events from the given vector. The duplicate events
  * removed are never the first ones encountered for each event
  * identity.
@@ -45,11 +73,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  options: {
-    ["consider-name"]?: boolean;
-    ["consider-data"]?: boolean;
-    ["consider-trace"]?: boolean;
-  } | null
+  options: DeduplicateFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const queue = new AsyncQueue<Event[]>();
   const key = [

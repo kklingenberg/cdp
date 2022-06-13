@@ -3,6 +3,16 @@ import { Event } from "../event";
 import { ajv } from "../utils";
 
 /**
+ * Options for this function.
+ */
+export type KeepWhenFunctionOptions = object;
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = { type: "object" };
+
+/**
  * Function that selects events according to a schema that is compared
  * with each event's data. Event's that don't match the schema are
  * dropped.
@@ -17,7 +27,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  options: object
+  options: KeepWhenFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const matchesSchema = ajv.compile(options);
   const queue = new AsyncQueue<Event[]>();
