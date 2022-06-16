@@ -242,7 +242,7 @@ incoming data as plain text, not JSON.
 
 **`input.poll`** **object** or **string**, the input form that makes a
 pipeline actively fetch data periodically from a remote source using
-HTTP requests.. If given as a string, it indicates the URI of the
+HTTP requests. If given as a string, it indicates the URI of the
 remote event source.
 
 **`input.poll.target`** required **string**, the target URI to use for
@@ -264,6 +264,51 @@ and thus should be wrapped.
 events that wrap the input data.
 
 **`input.poll.wrap.raw`** optional **boolean**, whether to treat
+incoming data as plain text, not JSON.
+
+#### `redis`
+
+**`input.redis`** **object**, the input form that makes the pipeline
+receive data from a redis instance or cluster. The options for
+receiving data are one of
+[`subscribe`](https://redis.io/commands/subscribe/),
+[`psubscribe`](https://redis.io/commands/psubscribe/),
+[`blpop`](https://redis.io/commands/blpop/) or
+[`brpop`](https://redis.io/commands/brpop/) for each of the
+corresponding redis commands.
+
+**`input.redis.url`** required **string** or **list of string**, a URL
+of list of URLs to connect to. If a list is given, a redis cluster is
+assumed.
+
+**`input.redis.address-map`** optional **object** with keys and values
+being addresses that should get translated when using a
+private-network redis cluster. Keys will be private addresses and
+values will be client-accesible addresses. This is useful for e.g. AWS
+Elasticache as explained
+[here](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/accessing-elasticache.html).
+
+**`input.redis.subscribe`** optional **string** or **list of string**,
+the channel key or keys to subscribe to if using `subscribe`.
+
+**`input.redis.psubscribe`** optional **string** or **list of
+string**, the channel pattern or patterns to subscribe to if using
+`psubscribe`.
+
+**`input.redis.blpop`** optional **string** or **list of string**, the
+key or keys to pop items from if using `blpop`.
+
+**`input.redis.brpop`** optional **string** or **list of string**, the
+key or keys to pop items from if using `brpop`.
+
+**`input.redis.wrap`** optional **string** or **object**, a wrapping
+directive which specifies that incoming data is not encoded events,
+and thus should be wrapped.
+
+**`input.redis.wrap.name`** required **string**, the name given to the
+events that wrap the input data.
+
+**`input.redis.wrap.raw`** optional **boolean**, whether to treat
 incoming data as plain text, not JSON.
 
 #### Wrapping

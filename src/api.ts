@@ -45,6 +45,11 @@ import {
   optionsSchema as pollInputOptionsSchema,
   make as makePollInput,
 } from "./input/poll";
+import {
+  RedisInputOptions,
+  optionsSchema as redisInputOptionsSchema,
+  make as makeRedisInput,
+} from "./input/redis";
 // Step functions
 import {
   DeduplicateFunctionOptions,
@@ -125,7 +130,8 @@ type InputTemplate =
   | { stdin: STDINInputOptions }
   | { tail: TailInputOptions }
   | { http: HTTPInputOptions }
-  | { poll: PollInputOptions };
+  | { poll: PollInputOptions }
+  | { redis: RedisInputOptions };
 const inputTemplateSchema = {
   anyOf: [
     makeWrapperSchema("generator", generatorInputOptionsSchema),
@@ -133,6 +139,7 @@ const inputTemplateSchema = {
     makeWrapperSchema("tail", tailInputOptionsSchema),
     makeWrapperSchema("http", httpInputOptionsSchema),
     makeWrapperSchema("poll", pollInputOptionsSchema),
+    makeWrapperSchema("redis", redisInputOptionsSchema),
   ],
 };
 
@@ -321,6 +328,11 @@ export const makePipelineTemplate = (rawThing: unknown): PipelineTemplate => {
       validateWrap(wrap, "the input's wrap option")
     )
   );
+  check(
+    matchInput.with({ redis: { wrap: P.select() } }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
   // 2. Check each step.
   Object.entries(thing.steps ?? {}).forEach(([name, definition]) => {
     const matchStep = match(definition);
@@ -444,6 +456,7 @@ export const runPipeline = async (
   deadEvents.set(0);
   // Create the input channel.
   const [inputChannel, inputEnded] = match(template.input)
+    .with({ redis: P.select() }, (c) => makeRedisInput(...ctx, c))
     .with({ poll: P.select() }, (c) => makePollInput(...ctx, c))
     .with({ http: P.select() }, (c) => makeHTTPInput(...ctx, c))
     .with({ tail: P.select() }, (c) => makeTailInput(...ctx, c))
