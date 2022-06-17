@@ -77,6 +77,11 @@ import {
   make as makeExposeHTTPFunction,
 } from "./step-functions/expose-http";
 import {
+  SendRedisFunctionOptions,
+  optionsSchema as sendRedisFunctionOptionsSchema,
+  make as makeSendRedisFunction,
+} from "./step-functions/send-redis";
+import {
   SendHTTPFunctionOptions,
   optionsSchema as sendHTTPFunctionOptionsSchema,
   make as makeSendHTTPFunction,
@@ -154,6 +159,7 @@ type StepFunctionTemplate =
   | { "send-stdout": SendSTDOUTFunctionOptions }
   | { "send-file": SendFileFunctionOptions }
   | { "send-http": SendHTTPFunctionOptions }
+  | { "send-redis": SendRedisFunctionOptions }
   | { "expose-http": ExposeHTTPFunctionOptions }
   | { "send-receive-jq": SendReceiveJqFunctionOptions }
   | { "send-receive-http": SendReceiveHTTPFunctionOptions };
@@ -166,6 +172,7 @@ const stepFunctionTemplateSchema = {
     makeWrapperSchema("send-stdout", sendSTDOUTFunctionOptionsSchema),
     makeWrapperSchema("send-file", sendFileFunctionOptionsSchema),
     makeWrapperSchema("send-http", sendHTTPFunctionOptionsSchema),
+    makeWrapperSchema("send-redis", sendRedisFunctionOptionsSchema),
     makeWrapperSchema("expose-http", exposeHTTPFunctionOptionsSchema),
     makeWrapperSchema("send-receive-jq", sendReceiveJqFunctionOptionsSchema),
     makeWrapperSchema(
@@ -502,6 +509,9 @@ export const runPipeline = async (
       )
       .with({ "expose-http": P.select() }, (f) =>
         makeExposeHTTPFunction(...ctx, f)
+      )
+      .with({ "send-redis": P.select() }, (f) =>
+        makeSendRedisFunction(...ctx, f)
       )
       .with({ "send-http": P.select() }, (f) => makeSendHTTPFunction(...ctx, f))
       .with({ "send-file": P.select() }, (f) => makeSendFileFunction(...ctx, f))

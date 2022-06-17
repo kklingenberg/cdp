@@ -1,6 +1,4 @@
 import { Readable } from "stream";
-import RedisClient from "ioredis";
-import { Redis, Cluster } from "ioredis";
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import {
   Event,
@@ -12,6 +10,7 @@ import {
   chooseParser,
   makeWrapper,
 } from "../event";
+import { connect, RedisConnection } from "../io/redis";
 import { makeLogger } from "../log";
 
 /**
@@ -79,11 +78,6 @@ export const optionsSchema = {
 };
 
 /**
- * Default port to assume for redis connections.
- */
-const DEFAULT_PORT = 6379;
-
-/**
  * Timeout in seconds for BLPOP and BRPOP operations.
  */
 const POP_TIMEOUT = 5;
@@ -124,40 +118,7 @@ export const make = (
   const parse = chooseParser(options.wrap);
   const wrapper = makeWrapper(options.wrap);
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
-  let client: Redis | Cluster;
-  if (
-    Array.isArray(options.url) ||
-    typeof options["address-map"] !== "undefined"
-  ) {
-    client = new Cluster(
-      Array.isArray(options.url) ? options.url : [options.url],
-      typeof options["address-map"] === "undefined"
-        ? {}
-        : {
-            natMap: Object.fromEntries(
-              Object.entries(options["address-map"]).map(([key, address]) => {
-                // address is given as a string, and the library
-                // expects a (host, port) pair
-                const pair = address.split(":");
-                if (pair.length === 1) {
-                  return [key, { host: address, port: DEFAULT_PORT }];
-                }
-                const rawPort = pair[pair.length - 1];
-                return [
-                  key,
-                  {
-                    host: pair.slice(0, -1).join(":"),
-                    port: parseInt(rawPort, 10),
-                  },
-                ];
-              })
-            ),
-          }
-    );
-  } else {
-    client = new RedisClient(options.url);
-  }
-  client.on("error", (err: Error) => logger.warn(`redis client error: ${err}`));
+  const client: RedisConnection = connect(options);
 
   const channel = flatMap(async (message: Buffer) => {
     arrivalTimestamp.update();
@@ -183,63 +144,77 @@ export const make = (
   // Initialize endless redis consumption
   const consuming = (async () => {
     if (typeof options.subscribe !== "undefined") {
-      await client.subscribe(...toargs(options.subscribe));
-      client.on("messageBuffer", (_, message: Buffer) => channel.send(message));
-      await done;
+      try {
+        await client.subscribe(...toargs(options.subscribe));
+        client.on("messageBuffer", (_, message: Buffer) =>
+          channel.send(message)
+        );
+        await done;
+      } catch (err) {
+        logger.error(`Couldn't subscribe to channel(s): ${err}`);
+      } finally {
+        await client.unsubscribe(...toargs(options.subscribe));
+        await client.quit();
+      }
     } else if (typeof options.psubscribe !== "undefined") {
-      await client.psubscribe(...toargs(options.psubscribe));
-      client.on("pmessageBuffer", async (_, __, message: Buffer) =>
-        channel.send(message)
-      );
-      await done;
+      try {
+        await client.psubscribe(...toargs(options.psubscribe));
+        client.on("pmessageBuffer", (_, __, message: Buffer) =>
+          channel.send(message)
+        );
+        await done;
+      } catch (err) {
+        logger.error(`Couldn't psubscribe to channel pattern(s): ${err}`);
+      } finally {
+        await client.punsubscribe(...toargs(options.psubscribe));
+        await client.quit();
+      }
     } else if (typeof options.blpop !== "undefined") {
-      await Promise.race([
-        (async () => {
-          while (!isDone) {
-            const result = await client.blpopBuffer(
-              toargs(options.blpop),
-              POP_TIMEOUT
-            );
-            if (result !== null) {
-              channel.send(result[1]);
+      try {
+        await Promise.race([
+          (async () => {
+            while (!isDone) {
+              const result = await client.blpopBuffer(
+                toargs(options.blpop),
+                POP_TIMEOUT
+              );
+              if (result !== null) {
+                channel.send(result[1]);
+              }
             }
-          }
-        })(),
-        done,
-      ]);
+          })(),
+          done,
+        ]);
+      } catch (err) {
+        logger.error(`Couldn't blpop from key(s): ${err}`);
+      } finally {
+        await client.quit();
+      }
     } else if (typeof options.brpop !== "undefined") {
-      await Promise.race([
-        (async () => {
-          while (!isDone) {
-            const result = await client.brpopBuffer(
-              toargs(options.brpop),
-              POP_TIMEOUT
-            );
-            if (result !== null) {
-              channel.send(result[1]);
+      try {
+        await Promise.race([
+          (async () => {
+            while (!isDone) {
+              const result = await client.brpopBuffer(
+                toargs(options.brpop),
+                POP_TIMEOUT
+              );
+              if (result !== null) {
+                channel.send(result[1]);
+              }
             }
-          }
-        })(),
-        done,
-      ]);
+          })(),
+          done,
+        ]);
+      } catch (err) {
+        logger.error(`Couldn't brpop from key(s): ${err}`);
+      } finally {
+        await client.quit();
+      }
     }
   })();
 
   // Assemble the event channel.
-  const stopConsuming: () => Promise<void> =
-    typeof options.subscribe !== "undefined"
-      ? async () => {
-          await client.unsubscribe(...toargs(options.subscribe));
-          notifyDone();
-        }
-      : typeof options.psubscribe !== "undefined"
-      ? async () => {
-          await client.punsubscribe(...toargs(options.psubscribe));
-          notifyDone();
-        }
-      : async () => {
-          notifyDone();
-        };
   return [
     parseChannel(
       {
@@ -249,8 +224,7 @@ export const make = (
           return false;
         },
         close: async () => {
-          await stopConsuming();
-          await client.quit();
+          notifyDone();
           await channel.close();
           logger.debug("Drained redis input");
         },
