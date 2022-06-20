@@ -35,7 +35,7 @@ export const make = async (
 ): Promise<Channel<Event[], Event>> => {
   const quantity =
     typeof options === "string" ? parseInt(options, 10) : options;
-  const queue = new AsyncQueue<Event[]>();
+  const queue = new AsyncQueue<Event[]>("step.<?>.keep");
   return flatMap(
     (events: Event[]) => Promise.resolve(events.slice(0, quantity)),
     queue.asChannel()

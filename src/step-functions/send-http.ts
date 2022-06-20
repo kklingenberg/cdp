@@ -102,7 +102,7 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
   } else {
     const accumulatingChannel: Channel<Event[], never> = drain(
-      new AsyncQueue<Event[]>().asChannel(),
+      new AsyncQueue<Event[]>("step.<?>.send-http.accumulating").asChannel(),
       async (events: Event[]) => {
         requests[i++] = sendEvents(events, target, method, headers);
         if (i === concurrent) {
@@ -117,7 +117,7 @@ export const make = async (
     forwarder = accumulatingChannel.send.bind(accumulatingChannel);
     closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
-  const queue = new AsyncQueue<Event[]>();
+  const queue = new AsyncQueue<Event[]>("step.<?>.send-http.forward");
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

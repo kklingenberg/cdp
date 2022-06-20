@@ -61,7 +61,7 @@ export const make = async (
     forwarder = jqChannel.send.bind(jqChannel);
     closeExternal = jqChannel.close.bind(jqChannel);
   }
-  const queue = new AsyncQueue<Event[]>();
+  const queue = new AsyncQueue<Event[]>("step.<?>.send-stdout.forward");
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

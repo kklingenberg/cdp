@@ -72,7 +72,7 @@ export const make = (
       ? parseFloat(options.seconds)
       : options.seconds ?? 1;
   const intervalDuration = durationSeconds * 1000;
-  const queue = new AsyncQueue<number>();
+  const queue = new AsyncQueue<number>("input.generator");
   const interval = setInterval(
     () => queue.push(Math.random()),
     intervalDuration

@@ -2,7 +2,13 @@ import { AsyncQueue, Channel, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
 import { makeChannel } from "../io/jq";
-import { connect, RedisConnection } from "../io/redis";
+import {
+  connect,
+  RedisConnectionOptions,
+  instanceSchema,
+  clusterSchema,
+  RedisConnection,
+} from "../io/redis";
 
 /**
  * A logger instance namespaced to this module.
@@ -12,14 +18,12 @@ const logger = makeLogger("step-functions/send-redis");
 /**
  * Options for this function.
  */
-export type SendRedisFunctionOptions = {
-  url: string | string[];
-  "address-map"?: Record<string, string>;
+export interface SendRedisFunctionOptions extends RedisConnectionOptions {
   publish?: string;
   rpush?: string;
   lpush?: string;
   ["jq-expr"]?: string;
-};
+}
 
 /**
  * Build a possible schema variation, to be combined with all other
@@ -28,21 +32,14 @@ export type SendRedisFunctionOptions = {
  * @param key The variating key.
  * @returns A partial schema.
  */
-const buildSchema = (key: string): object => ({
+const buildSchema = (
+  baseKey: string,
+  baseSchema: object,
+  key: string
+): object => ({
   type: "object",
   properties: {
-    url: {
-      anyOf: [
-        { type: "string", minLength: 1 },
-        { type: "array", items: { type: "string", minLength: 1 }, minItems: 1 },
-      ],
-    },
-    "address-map": {
-      type: "object",
-      properties: {},
-      additionalProperties: { type: "string", minLength: 1 },
-      required: [],
-    },
+    [baseKey]: baseSchema,
     [key]: {
       type: "string",
       minLength: 1,
@@ -50,14 +47,21 @@ const buildSchema = (key: string): object => ({
     "jq-expr": { type: "string", minLength: 1 },
   },
   additionalProperties: false,
-  required: ["url", key],
+  required: [baseKey, key],
 });
 
 /**
  * An ajv schema for the options.
  */
 export const optionsSchema = {
-  anyOf: [buildSchema("publish"), buildSchema("rpush"), buildSchema("lpush")],
+  anyOf: [
+    buildSchema("instance", instanceSchema, "publish"),
+    buildSchema("cluster", clusterSchema, "publish"),
+    buildSchema("instance", instanceSchema, "rpush"),
+    buildSchema("cluster", clusterSchema, "rpush"),
+    buildSchema("instance", instanceSchema, "lpush"),
+    buildSchema("cluster", clusterSchema, "lpush"),
+  ],
 };
 
 /**
@@ -73,7 +77,7 @@ const sendMessage =
   async (...messages: unknown[]): Promise<void> => {
     if (typeof options.publish !== "undefined") {
       try {
-        for (const message in messages) {
+        for (const message of messages) {
           await client.publish(options.publish, JSON.stringify(message));
         }
       } catch (err) {
@@ -131,7 +135,7 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
   } else {
     const passThroughChannel: Channel<Event[], never> = drain(
-      new AsyncQueue<Event[]>().asChannel(),
+      new AsyncQueue<Event[]>("step.<?>.send-redis.pass-through").asChannel(),
       async (events: Event[]) => {
         await sendMessage(
           client,
@@ -142,7 +146,7 @@ export const make = async (
     forwarder = passThroughChannel.send.bind(passThroughChannel);
     closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>();
+  const queue = new AsyncQueue<Event[]>("step.<?>.send-redis.forward");
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;
@@ -152,6 +156,7 @@ export const make = async (
     close: async () => {
       await forwardingChannel.close();
       await closeExternal();
+      await client.quit();
     },
   };
 };

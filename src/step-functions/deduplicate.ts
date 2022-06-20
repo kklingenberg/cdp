@@ -75,7 +75,7 @@ export const make = async (
   /* eslint-enable @typescript-eslint/no-unused-vars */
   options: DeduplicateFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
-  const queue = new AsyncQueue<Event[]>();
+  const queue = new AsyncQueue<Event[]>("step.<?>.deduplicate");
   const key = [
     options?.["consider-name"] ?? true ? "1" : "0",
     options?.["consider-data"] ?? true ? "1" : "0",

@@ -149,7 +149,7 @@ export const run = async (
   );
   // Initiate the central bus queue, a dead event list, and all the
   // steps.
-  const busQueue = new AsyncQueue<[number, Event]>();
+  const busQueue = new AsyncQueue<[number, Event]>("bus");
   const deadEvents: Event[] = [];
   const makeSender =
     (index: number) =>

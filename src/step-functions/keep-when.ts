@@ -30,7 +30,7 @@ export const make = async (
   options: KeepWhenFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const matchesSchema = ajv.compile(options);
-  const queue = new AsyncQueue<Event[]>();
+  const queue = new AsyncQueue<Event[]>("step.<?>.keep-when");
   return flatMap(
     (events: Event[]) =>
       Promise.resolve(events.filter((event) => matchesSchema(event.data))),

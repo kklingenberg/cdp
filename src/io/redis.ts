@@ -1,5 +1,11 @@
 import RedisClient from "ioredis";
-import { Redis, Cluster } from "ioredis";
+import {
+  Redis,
+  Cluster,
+  RedisOptions,
+  ClusterNode,
+  ClusterOptions,
+} from "ioredis";
 import { makeLogger } from "../log";
 
 /**
@@ -10,15 +16,82 @@ const logger = makeLogger("io/redis");
 /**
  * Redis connection options.
  */
-interface Options {
-  url: string | string[];
-  "address-map"?: Record<string, string>;
+export interface RedisConnectionOptions {
+  instance?:
+    | string
+    | {
+        path: string;
+        options?: RedisOptions;
+      };
+  cluster?:
+    | ClusterNode[]
+    | {
+        nodes: ClusterNode[];
+        options?: ClusterOptions;
+      };
 }
 
 /**
- * Default port to assume for redis connections.
+ * Ajv schema for the instance portion of the RedisOptions interface.
  */
-const DEFAULT_PORT = 6379;
+export const instanceSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          minLength: 1,
+        },
+        options: { type: "object" },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
+  ],
+};
+
+/**
+ * An ajv schema for the ClusterNode[] type.
+ */
+const clusterNodesSchema = {
+  type: "array",
+  minItems: 1,
+  items: {
+    anyOf: [
+      { type: "string", minLength: 1 },
+      { type: "integer", minimum: 1, maximum: 65535 },
+      {
+        type: "object",
+        properties: {
+          host: { type: "string", minLength: 1 },
+          port: { type: "integer", minimum: 1, maximum: 65535 },
+        },
+        required: ["host", "port"],
+        additionalProperties: false,
+      },
+    ],
+  },
+};
+
+/**
+ * Ajv schema for the cluster portion of the RedisOptions interface.
+ */
+export const clusterSchema = {
+  anyOf: [
+    clusterNodesSchema,
+    {
+      type: "object",
+      properties: {
+        nodes: clusterNodesSchema,
+        options: { type: "object" },
+      },
+      required: ["nodes"],
+      additionalProperties: false,
+    },
+  ],
+};
 
 /**
  * Wrap both connection types.
@@ -31,39 +104,26 @@ export type RedisConnection = Redis | Cluster;
  * @param options The options given for the connection.
  * @returns A client object for a single instance or a cluster.
  */
-export const connect = (options: Options): RedisConnection => {
+export const connect = (options: RedisConnectionOptions): RedisConnection => {
   let client: RedisConnection;
-  if (
-    Array.isArray(options.url) ||
-    typeof options["address-map"] !== "undefined"
-  ) {
-    client = new Cluster(
-      Array.isArray(options.url) ? options.url : [options.url],
-      typeof options["address-map"] === "undefined"
-        ? {}
-        : {
-            natMap: Object.fromEntries(
-              Object.entries(options["address-map"]).map(([key, address]) => {
-                // address is given as a string, and the library
-                // expects a (host, port) pair
-                const pair = address.split(":");
-                if (pair.length === 1) {
-                  return [key, { host: address, port: DEFAULT_PORT }];
-                }
-                const rawPort = pair[pair.length - 1];
-                return [
-                  key,
-                  {
-                    host: pair.slice(0, -1).join(":"),
-                    port: parseInt(rawPort, 10),
-                  },
-                ];
-              })
-            ),
-          }
-    );
+  if (typeof options.cluster !== "undefined") {
+    if (Array.isArray(options.cluster)) {
+      client = new Cluster(options.cluster);
+    } else if (typeof options.cluster.options !== "undefined") {
+      client = new Cluster(options.cluster.nodes, options.cluster.options);
+    } else {
+      client = new Cluster(options.cluster.nodes);
+    }
+  } else if (typeof options.instance !== "undefined") {
+    if (typeof options.instance === "string") {
+      client = new RedisClient(options.instance);
+    } else if (typeof options.instance.options !== "undefined") {
+      client = new RedisClient(options.instance.path, options.instance.options);
+    } else {
+      client = new RedisClient(options.instance.path);
+    }
   } else {
-    client = new RedisClient(options.url);
+    throw new Error("misconfigured redis connection");
   }
   client.on("error", (err: Error) => logger.warn(`redis client error: ${err}`));
   return client;

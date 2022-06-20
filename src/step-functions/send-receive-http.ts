@@ -87,7 +87,7 @@ export const make = async (
       jqChannel
     );
   } else {
-    const queue = new AsyncQueue<Event[]>();
+    const queue = new AsyncQueue<Event[]>("step.<?>.send-receive-http");
     return flatMap(
       (events: Event[]) =>
         sendReceiveEvents(

@@ -93,7 +93,7 @@ export const make = (
   const target = typeof options === "string" ? options : options.target;
   const headers = typeof options === "string" ? {} : options.headers ?? {};
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
-  const queue = new AsyncQueue<unknown>();
+  const queue = new AsyncQueue<unknown>("input.poll");
   // Keep a record of the latest ETag, so as to not duplicate events.
   let latestETag: string | null = null;
   // One poll is a GET request to the target.

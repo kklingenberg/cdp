@@ -73,7 +73,7 @@ export const make = (
   const startPos =
     typeof options === "string" ? "end" : options["start-at"] ?? "end";
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
-  const queue = new AsyncQueue<unknown>();
+  const queue = new AsyncQueue<unknown>("input.tail");
   // Wrap the queue's channel to make it look like an input channel.
   let notifyDrained: () => void;
   const drained: Promise<void> = new Promise((resolve) => {

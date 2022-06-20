@@ -69,6 +69,11 @@ export class Queue<Type> {
  */
 export class AsyncQueue<Type> {
   /**
+   * A name useful for debugging.
+   */
+  name: string;
+
+  /**
    * The data in the queue.
    */
   data: Queue<Type> = new Queue();
@@ -107,7 +112,8 @@ export class AsyncQueue<Type> {
    */
   iterator: () => AsyncGenerator<Type>;
 
-  constructor() {
+  constructor(name = "anonymous queue") {
+    this.name = name;
     this.lock = new Promise((resolve) => {
       this.releaseLock = resolve;
     });
@@ -131,7 +137,7 @@ export class AsyncQueue<Type> {
    */
   push(value: Type): boolean {
     if (this.closed) {
-      logger.warn("push() attempted on a closed queue");
+      logger.warn(`push() attempted on a closed queue: ${this.name}`);
       return false;
     }
     this.data.push(value);
@@ -160,7 +166,9 @@ export class AsyncQueue<Type> {
   async shift(): Promise<Type> {
     await this.lock;
     if (this.data.length === 0) {
-      throw new Error("shift() attempted on an empty closed queue");
+      throw new Error(
+        `shift() attempted on an empty closed queue: ${this.name}`
+      );
     }
     const value = this.data.shift() as Type;
     if (this.data.length === 0 && !this.closed) {
@@ -193,7 +201,7 @@ export class AsyncQueue<Type> {
    * Return a string representation of this queue.
    */
   toString(): string {
-    return `AsyncQueue<closed=${this.closed}, items=${this.data.length}>`;
+    return `AsyncQueue<name=${this.name}, closed=${this.closed}, items=${this.data.length}>`;
   }
 }
 

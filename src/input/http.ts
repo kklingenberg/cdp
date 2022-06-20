@@ -81,7 +81,7 @@ export const make = (
       : options.port ?? HTTP_SERVER_DEFAULT_PORT;
   const port = typeof rawPort === "string" ? parseInt(rawPort) : rawPort;
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
-  const queue = new AsyncQueue<unknown>();
+  const queue = new AsyncQueue<unknown>("input.http");
   const server = makeHTTPServer(port, async (ctx) => {
     logger.debug("Received request:", ctx.request.method, ctx.request.path);
     if (ctx.request.method === "POST" && ctx.request.path === endpoint) {

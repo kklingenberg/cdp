@@ -10,7 +10,13 @@ import {
   chooseParser,
   makeWrapper,
 } from "../event";
-import { connect, RedisConnection } from "../io/redis";
+import {
+  connect,
+  RedisConnectionOptions,
+  instanceSchema,
+  clusterSchema,
+  RedisConnection,
+} from "../io/redis";
 import { makeLogger } from "../log";
 
 /**
@@ -21,15 +27,13 @@ const logger = makeLogger("input/redis");
 /**
  * Options for this input form.
  */
-export type RedisInputOptions = {
-  url: string | string[];
-  "address-map"?: Record<string, string>;
+export interface RedisInputOptions extends RedisConnectionOptions {
   subscribe?: string | string[];
   psubscribe?: string | string[];
   blpop?: string | string[];
   brpop?: string | string[];
   wrap?: WrapDirective;
-};
+}
 
 /**
  * Build a possible schema variation, to be combined with all other
@@ -38,21 +42,14 @@ export type RedisInputOptions = {
  * @param key The variating key.
  * @returns A partial schema.
  */
-const buildSchema = (key: string): object => ({
+const buildSchema = (
+  baseKey: string,
+  baseSchema: object,
+  key: string
+): object => ({
   type: "object",
   properties: {
-    url: {
-      anyOf: [
-        { type: "string", minLength: 1 },
-        { type: "array", items: { type: "string", minLength: 1 }, minItems: 1 },
-      ],
-    },
-    "address-map": {
-      type: "object",
-      properties: {},
-      additionalProperties: { type: "string", minLength: 1 },
-      required: [],
-    },
+    [baseKey]: baseSchema,
     [key]: {
       anyOf: [
         { type: "string", minLength: 1 },
@@ -62,7 +59,7 @@ const buildSchema = (key: string): object => ({
     wrap: wrapDirectiveSchema,
   },
   additionalProperties: false,
-  required: ["url", key],
+  required: [baseKey, key],
 });
 
 /**
@@ -70,10 +67,14 @@ const buildSchema = (key: string): object => ({
  */
 export const optionsSchema = {
   anyOf: [
-    buildSchema("subscribe"),
-    buildSchema("psubscribe"),
-    buildSchema("blpop"),
-    buildSchema("brpop"),
+    buildSchema("instance", instanceSchema, "subscribe"),
+    buildSchema("cluster", clusterSchema, "subscribe"),
+    buildSchema("instance", instanceSchema, "psubscribe"),
+    buildSchema("cluster", clusterSchema, "psubscribe"),
+    buildSchema("instance", instanceSchema, "blpop"),
+    buildSchema("cluster", clusterSchema, "blpop"),
+    buildSchema("instance", instanceSchema, "brpop"),
+    buildSchema("cluster", clusterSchema, "brpop"),
   ],
 };
 
@@ -120,14 +121,14 @@ export const make = (
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
   const client: RedisConnection = connect(options);
 
-  const channel = flatMap(async (message: Buffer) => {
+  const channel = flatMap(async (message: string) => {
     arrivalTimestamp.update();
     const things = [];
-    for await (const thing of parse(Readable.from([message]), message.length)) {
+    for await (const thing of parse(Readable.from([message]))) {
       things.push(wrapper(thing));
     }
     return things;
-  }, new AsyncQueue<Buffer>().asChannel());
+  }, new AsyncQueue<string>("input.redis").asChannel());
 
   // The same thing in three flavours: a stopping flag, a callback,
   // and a promise.
@@ -146,9 +147,10 @@ export const make = (
     if (typeof options.subscribe !== "undefined") {
       try {
         await client.subscribe(...toargs(options.subscribe));
-        client.on("messageBuffer", (_, message: Buffer) =>
-          channel.send(message)
-        );
+        client.on("message", (redisChannel: string, message: string) => {
+          logger.debug("Got message from redis channel", redisChannel, message);
+          channel.send(message);
+        });
         await done;
       } catch (err) {
         logger.error(`Couldn't subscribe to channel(s): ${err}`);
@@ -159,9 +161,10 @@ export const make = (
     } else if (typeof options.psubscribe !== "undefined") {
       try {
         await client.psubscribe(...toargs(options.psubscribe));
-        client.on("pmessageBuffer", (_, __, message: Buffer) =>
-          channel.send(message)
-        );
+        client.on("pmessage", (_, redisChannel: string, message: string) => {
+          logger.debug("Got message from redis channel", redisChannel, message);
+          channel.send(message);
+        });
         await done;
       } catch (err) {
         logger.error(`Couldn't psubscribe to channel pattern(s): ${err}`);
@@ -174,11 +177,16 @@ export const make = (
         await Promise.race([
           (async () => {
             while (!isDone) {
-              const result = await client.blpopBuffer(
+              const result = await client.blpop(
                 toargs(options.blpop),
                 POP_TIMEOUT
               );
               if (result !== null) {
+                logger.debug(
+                  "Got message from redis list",
+                  result[0],
+                  result[1]
+                );
                 channel.send(result[1]);
               }
             }
@@ -195,11 +203,16 @@ export const make = (
         await Promise.race([
           (async () => {
             while (!isDone) {
-              const result = await client.brpopBuffer(
+              const result = await client.brpop(
                 toargs(options.brpop),
                 POP_TIMEOUT
               );
               if (result !== null) {
+                logger.debug(
+                  "Got message from redis list",
+                  result[0],
+                  result[1]
+                );
                 channel.send(result[1]);
               }
             }

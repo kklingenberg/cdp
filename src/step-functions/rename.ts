@@ -55,7 +55,7 @@ export const make = async (
     "replace" in options
       ? () => options.replace
       : (name) => (options.prepend ?? "") + name + (options.append ?? "");
-  const queue = new AsyncQueue<Event[]>();
+  const queue = new AsyncQueue<Event[]>("step.<?>.rename");
   return flatMap(
     (events: Event[]) =>
       Promise.all(

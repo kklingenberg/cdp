@@ -181,7 +181,7 @@ export const make = async (
     );
   } else {
     responsesChannel = drain(
-      new AsyncQueue<Event[]>().asChannel(),
+      new AsyncQueue<Event[]>("step.<?>.expoes-http.accumulating").asChannel(),
       async (events: Event[]) => {
         const [key, response] = await makeEventWindowResponse(events);
         registerResponse(key, response);
@@ -247,7 +247,7 @@ export const make = async (
   const forwardingChannel = flatMap(async (events: Event[]) => {
     responsesChannel.send(events);
     return events;
-  }, new AsyncQueue<Event[]>().asChannel());
+  }, new AsyncQueue<Event[]>("step.<?>.expose-http.forward").asChannel());
   return {
     ...forwardingChannel,
     close: async () => {
