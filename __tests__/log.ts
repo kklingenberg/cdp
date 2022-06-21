@@ -13,7 +13,7 @@ afterEach(() => {
   mockedConsoleError.mockRestore();
 });
 
-test("Loggers can be created according to the current log level", () => {
+test("@standalone Loggers can be created according to the current log level", () => {
   // Assumes the current log level is 'error'.
   // This tests uses the fact that the null logger functions return
   // null, while the active logger functions return undefined.

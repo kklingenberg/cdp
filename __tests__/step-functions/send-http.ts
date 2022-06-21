@@ -16,7 +16,7 @@ import { make } from "../../src/step-functions/send-http";
 import { resolveAfter } from "../../src/utils";
 import { consume } from "../test-utils";
 
-test("Send-http works as expected", async () => {
+test("@standalone Send-http works as expected", async () => {
   // Arrange
   const target = "http://nothing";
   const method = "PATCH";
@@ -44,7 +44,7 @@ test("Send-http works as expected", async () => {
   });
 });
 
-test("Send-http works when specifying a target plainly", async () => {
+test("@standalone Send-http works when specifying a target plainly", async () => {
   // Arrange
   const target = "http://nothing";
   const method = "POST";
@@ -72,7 +72,7 @@ test("Send-http works when specifying a target plainly", async () => {
   });
 });
 
-test("Send-http works when specifying a jq expression and headers", async () => {
+test("@standalone Send-http works when specifying a jq expression and headers", async () => {
   // Arrange
   const target = "http://nothing";
   const method = "PUT";

@@ -3,7 +3,7 @@ import { make as makeEvent } from "../src/event";
 import { makeWindowingChannel } from "../src/step";
 import { resolveAfter } from "../src/utils";
 
-test("A size-1 windowed channel doesn't care about timeouts", async () => {
+test("@standalone A size-1 windowed channel doesn't care about timeouts", async () => {
   // Arrange
   const channel = makeWindowingChannel({
     name: "test",
@@ -27,7 +27,7 @@ test("A size-1 windowed channel doesn't care about timeouts", async () => {
   expect(values.map((x) => x.map((y) => y.data))).toEqual([[1], [2], [3], [4]]);
 });
 
-test("A windowed channel truncates the last group after being closed", async () => {
+test("@standalone A windowed channel truncates the last group after being closed", async () => {
   // Arrange
   const channel = makeWindowingChannel({
     name: "test",
@@ -58,7 +58,7 @@ test("A windowed channel truncates the last group after being closed", async () 
   ]);
 });
 
-test("A windowed channel using reduce mode creates disjoint groups", async () => {
+test("@standalone A windowed channel using reduce mode creates disjoint groups", async () => {
   // Arrange
   const channel = makeWindowingChannel({
     name: "test",
@@ -85,7 +85,7 @@ test("A windowed channel using reduce mode creates disjoint groups", async () =>
   ]);
 });
 
-test("A windowed channel uses its timeout to produce partial groups", async () => {
+test("@standalone A windowed channel uses its timeout to produce partial groups", async () => {
   // Arrange
   const channel = makeWindowingChannel({
     name: "test",

@@ -19,7 +19,7 @@ import { make } from "../../src/step-functions/send-receive-http";
 import { resolveAfter } from "../../src/utils";
 import { consume } from "../test-utils";
 
-test("Send-receive-http works as expected", async () => {
+test("@standalone Send-receive-http works as expected", async () => {
   // Arrange
   const target = "http://nothing";
   const method = "POST";
@@ -48,7 +48,7 @@ test("Send-receive-http works as expected", async () => {
   });
 });
 
-test("Send-receive-http works when using jq as intermediary", async () => {
+test("@standalone Send-receive-http works when using jq as intermediary", async () => {
   // Arrange
   const target = "http://nothing";
   const method = "PATCH";

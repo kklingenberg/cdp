@@ -146,11 +146,11 @@ export const make = (
   const consuming = (async () => {
     if (typeof options.subscribe !== "undefined") {
       try {
-        await client.subscribe(...toargs(options.subscribe));
         client.on("message", (redisChannel: string, message: string) => {
           logger.debug("Got message from redis channel", redisChannel, message);
           channel.send(message);
         });
+        await client.subscribe(...toargs(options.subscribe));
         await done;
       } catch (err) {
         logger.error(`Couldn't subscribe to channel(s): ${err}`);
@@ -160,11 +160,11 @@ export const make = (
       }
     } else if (typeof options.psubscribe !== "undefined") {
       try {
-        await client.psubscribe(...toargs(options.psubscribe));
         client.on("pmessage", (_, redisChannel: string, message: string) => {
           logger.debug("Got message from redis channel", redisChannel, message);
           channel.send(message);
         });
+        await client.psubscribe(...toargs(options.psubscribe));
         await done;
       } catch (err) {
         logger.error(`Couldn't psubscribe to channel pattern(s): ${err}`);

@@ -3,7 +3,7 @@ import { resolveAfter } from "../../src/utils";
 import { make } from "../../src/step-functions/send-receive-jq";
 import { consume } from "../test-utils";
 
-test("Send-receive-jq works as expected", async () => {
+test("@standalone Send-receive-jq works as expected", async () => {
   // Arrange
   const pipelineName = "test";
   const pipelineSignature = "signature";
@@ -25,7 +25,7 @@ test("Send-receive-jq works as expected", async () => {
   expect(output.map((e) => e.data)).toEqual(["replaced!", "replaced!"]);
 });
 
-test("Send-receive-jq will filter out events that are invalid", async () => {
+test("@standalone Send-receive-jq will filter out events that are invalid", async () => {
   // Arrange
   const pipelineName = "test";
   const pipelineSignature = "signature";

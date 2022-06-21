@@ -2,7 +2,7 @@ import { make as makeEvent } from "../../src/event";
 import { make } from "../../src/step-functions/rename";
 import { consume } from "../test-utils";
 
-test("Renaming with replacement works as expected", async () => {
+test("@standalone Renaming with replacement works as expected", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", {
     replace: "replaced",
@@ -29,7 +29,7 @@ test("Renaming with replacement works as expected", async () => {
   ]);
 });
 
-test("Renaming with prepend works as expected", async () => {
+test("@standalone Renaming with prepend works as expected", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", {
     prepend: "prefix.",
@@ -56,7 +56,7 @@ test("Renaming with prepend works as expected", async () => {
   ]);
 });
 
-test("Renaming with append works as expected", async () => {
+test("@standalone Renaming with append works as expected", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", {
     append: ".suffix",
@@ -83,7 +83,7 @@ test("Renaming with append works as expected", async () => {
   ]);
 });
 
-test("Renaming with prepend and append works as expected", async () => {
+test("@standalone Renaming with prepend and append works as expected", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", {
     prepend: "prefix.",

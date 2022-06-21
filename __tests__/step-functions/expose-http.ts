@@ -4,7 +4,7 @@ import { make } from "../../src/step-functions/expose-http";
 import { resolveAfter } from "../../src/utils";
 import { consume } from "../test-utils";
 
-test("Expose-http works as expected", async () => {
+test("@standalone Expose-http works as expected", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", {
     endpoint: "/events",
@@ -68,7 +68,7 @@ test("Expose-http works as expected", async () => {
   );
 });
 
-test("Expose-http can transform responses using a jq filter", async () => {
+test("@standalone Expose-http can transform responses using a jq filter", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", {
     endpoint: "/events",

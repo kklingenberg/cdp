@@ -1,7 +1,7 @@
 import { consume } from "./test-utils";
 import { AsyncQueue, flatMap, compose } from "../src/async-queue";
 
-test("Shifting from an empty queue blocks", async () => {
+test("@standalone Shifting from an empty queue blocks", async () => {
   // Arrange
   const queue = new AsyncQueue<boolean>();
   // Act
@@ -13,7 +13,7 @@ test("Shifting from an empty queue blocks", async () => {
   expect(blocked).toBe(true);
 });
 
-test("Shifting from a non-empty queue doesn't block", async () => {
+test("@standalone Shifting from a non-empty queue doesn't block", async () => {
   // Arrange
   const queue = new AsyncQueue<boolean>();
   // Act
@@ -26,7 +26,7 @@ test("Shifting from a non-empty queue doesn't block", async () => {
   expect(blocked).toBe(false);
 });
 
-test("A blocked queue can be unblocked by pushing", async () => {
+test("@standalone A blocked queue can be unblocked by pushing", async () => {
   // Arrange
   const queue = new AsyncQueue<null>();
   let blocked = true;
@@ -40,7 +40,7 @@ test("A blocked queue can be unblocked by pushing", async () => {
   expect(blocked).toBe(false);
 });
 
-test("An unblocked queue can be blocked by draining", async () => {
+test("@standalone An unblocked queue can be blocked by draining", async () => {
   // Arrange
   const queue = new AsyncQueue<boolean>();
   // Act & assert
@@ -57,7 +57,7 @@ test("An unblocked queue can be blocked by draining", async () => {
   expect(blocked).toBe(true);
 });
 
-test("A queue can be iterated over, and will yield until it's closed", async () => {
+test("@standalone A queue can be iterated over, and will yield until it's closed", async () => {
   // Arrange
   const queue = new AsyncQueue<number>();
   const valueCount = 7;
@@ -78,7 +78,7 @@ test("A queue can be iterated over, and will yield until it's closed", async () 
   expect(values).toEqual(Array.from({ length: valueCount }, (_, i) => i));
 });
 
-test("Closing a queue prevents pushes", async () => {
+test("@standalone Closing a queue prevents pushes", async () => {
   // Arrange
   const queue = new AsyncQueue<number>();
   const pushedValues = [1, 2, 3];
@@ -96,7 +96,7 @@ test("Closing a queue prevents pushes", async () => {
   expect(remainderValues).toEqual([]);
 });
 
-test("A queue can be used as a channel", async () => {
+test("@standalone A queue can be used as a channel", async () => {
   // Arrange
   const queue = new AsyncQueue<number>();
   // Act
@@ -111,7 +111,7 @@ test("A queue can be used as a channel", async () => {
   expect(third).toEqual(3);
 });
 
-test("A queue's drain promise won't resolve if the queue isn't closed", async () => {
+test("@standalone A queue's drain promise won't resolve if the queue isn't closed", async () => {
   // Arrange
   const queue = new AsyncQueue<boolean>();
   let drained;
@@ -129,7 +129,7 @@ test("A queue's drain promise won't resolve if the queue isn't closed", async ()
   expect(drained).toBe(true);
 });
 
-test("Channels can be composed with the compose combinator", async () => {
+test("@standalone Channels can be composed with the compose combinator", async () => {
   // Arrange
   const firstQueue = new AsyncQueue<number>();
   const firstChannel = flatMap(async (x) => [x * x], firstQueue.asChannel());

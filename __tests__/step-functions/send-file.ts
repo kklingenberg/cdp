@@ -29,7 +29,7 @@ afterEach((done) => {
 
 const readFile = (path: string): string => readFileSync(path, "utf-8");
 
-test("Send-file works as expected", async () => {
+test("@standalone Send-file works as expected", async () => {
   expect(fixtures.directory).not.toBeNull();
   const path = join(fixtures.directory as string, "test");
   // Arrange
@@ -52,7 +52,7 @@ test("Send-file works as expected", async () => {
   );
 });
 
-test("Send-stdout works when using a jq program to preprocess the data", async () => {
+test("@standalone Send-file works when using a jq program to preprocess the data", async () => {
   expect(fixtures.directory).not.toBeNull();
   const path = join(fixtures.directory as string, "test");
   // Arrange
@@ -77,7 +77,7 @@ test("Send-stdout works when using a jq program to preprocess the data", async (
   expect(readFile(path)).toEqual('hello\n["world"]\n');
 });
 
-test("Send-file doesn't overwrite file contents", async () => {
+test("@standalone Send-file doesn't overwrite file contents", async () => {
   expect(fixtures.directory).not.toBeNull();
   const path = join(fixtures.directory as string, "test");
   writeFileSync(path, "this was here before those 'events' arrived");
