@@ -14,7 +14,7 @@ afterEach(() => {
   mockedConsoleLog.mockRestore();
 });
 
-test("Pipeline template construction works normally", () => {
+test("@standalone Pipeline template construction works normally", () => {
   // Arrange
   const raw = {
     name: "Test",
@@ -45,7 +45,7 @@ test("Pipeline template construction works normally", () => {
   expect(() => makePipelineTemplate(raw)).not.toThrow();
 });
 
-test("Pipeline template construction works on empty pipelines", () => {
+test("@standalone Pipeline template construction works on empty pipelines", () => {
   // Arrange
   const raw = {
     name: "Test",
@@ -55,7 +55,7 @@ test("Pipeline template construction works on empty pipelines", () => {
   expect(() => makePipelineTemplate(raw)).not.toThrow();
 });
 
-test("Pipeline template construction accepts extra keys at the root", () => {
+test("@standalone Pipeline template construction accepts extra keys at the root", () => {
   // Arrange
   const raw = {
     name: "Test",
@@ -66,7 +66,7 @@ test("Pipeline template construction accepts extra keys at the root", () => {
   expect(() => makePipelineTemplate(raw)).not.toThrow();
 });
 
-test("Functions must use exactly one of flatmap or reduce", () => {
+test("@standalone Functions must use exactly one of flatmap or reduce", () => {
   // Arrange
   const missingBoth = {
     name: "Test",
@@ -95,7 +95,7 @@ test("Functions must use exactly one of flatmap or reduce", () => {
   expect(() => makePipelineTemplate(correct)).not.toThrow();
 });
 
-test("The function keep-when must hold a valid schema", () => {
+test("@standalone The function keep-when must hold a valid schema", () => {
   // Arrange
   const invalidRaw = {
     name: "Test",
@@ -116,7 +116,7 @@ test("The function keep-when must hold a valid schema", () => {
   expect(() => makePipelineTemplate(validRaw)).not.toThrow();
 });
 
-test("Stopping a pipeline drains the events", async () => {
+test("@standalone Stopping a pipeline drains the events", async () => {
   // Arrange
   const rawTemplate = {
     name: "Test",

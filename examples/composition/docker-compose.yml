@@ -38,6 +38,16 @@ services:
       SOURCE: http://third:8002/events
     depends_on:
       - third
+      - fifth
+
+  fifth:
+    <<: *cdp
+    command: ["/app/pipeline-fifth.yaml"]
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
 
 volumes:
   bridge:

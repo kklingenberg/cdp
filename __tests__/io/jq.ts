@@ -6,7 +6,7 @@ afterEach(() => {
   closeInstances();
 });
 
-test("Integration with jq works as expected", async () => {
+test("@standalone Integration with jq works as expected", async () => {
   // Arrange
   const { send, receive } = await makeChannel(`{key: join(" ")}`);
   // Act
@@ -18,7 +18,7 @@ test("Integration with jq works as expected", async () => {
   expect(second).toEqual({ key: "lorem ipsum" });
 });
 
-test("Failures during processing interrupt parsing of the current payload", async () => {
+test("@standalone Failures during processing interrupt parsing of the current payload", async () => {
   // Arrange
   const { send, receive } = await makeChannel(`.[] | (1 / .)`);
   // Act
@@ -34,7 +34,7 @@ test("Failures during processing interrupt parsing of the current payload", asyn
   expect(third).toEqual(4);
 });
 
-test("Closing a jq channel ends the stream", async () => {
+test("@standalone Closing a jq channel ends the stream", async () => {
   // Arrange
   const { send, receive, close } = await makeChannel(".");
   // Act

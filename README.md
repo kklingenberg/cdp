@@ -242,7 +242,7 @@ incoming data as plain text, not JSON.
 
 **`input.poll`** **object** or **string**, the input form that makes a
 pipeline actively fetch data periodically from a remote source using
-HTTP requests.. If given as a string, it indicates the URI of the
+HTTP requests. If given as a string, it indicates the URI of the
 remote event source.
 
 **`input.poll.target`** required **string**, the target URI to use for
@@ -264,6 +264,70 @@ and thus should be wrapped.
 events that wrap the input data.
 
 **`input.poll.wrap.raw`** optional **boolean**, whether to treat
+incoming data as plain text, not JSON.
+
+#### `redis`
+
+**`input.redis`** **object**, the input form that makes the pipeline
+receive data from a redis instance or cluster. The options for
+receiving data are one of
+[`subscribe`](https://redis.io/commands/subscribe/),
+[`psubscribe`](https://redis.io/commands/psubscribe/),
+[`blpop`](https://redis.io/commands/blpop/) or
+[`brpop`](https://redis.io/commands/brpop/) for each of the
+corresponding redis commands.
+
+**`input.redis.instance`** optional **string** or **object**,
+parameters required to connect to a single redis instance. If using a
+plain string, it must match the same restrictions as the `path`
+parameter described below.
+
+**`input.redis.instance.path`** required **string**, a redis
+URL. Check te [ioredis
+documentation](https://github.com/luin/ioredis#connect-to-redis) for
+details.
+
+**`input.redis.instance.options`** optional **object**, connection
+options as given to the ioredis library.
+
+**`input.redis.cluster`** optional **list of ClusterNode** or
+**object**, parameters required to connect to a redis cluster. If
+using a list of cluster nodes, they must match the same restrictions
+as the `nodes` parameter described below.
+
+**`input.redis.cluster.nodes`** required **list of ClusterNode**, a
+list of nodes to connect to initially. Check te [ioredis
+documentation](https://github.com/luin/ioredis#cluster) for details.
+
+**`input.redis.cluster.options`** optional **object**, connection
+options as given to the ioredis library.
+
+One of `input.redis.instance` or `input.redis.cluster` must be used.
+
+**`input.redis.subscribe`** optional **string** or **list of string**,
+the channel key or keys to subscribe to if using `subscribe`.
+
+**`input.redis.psubscribe`** optional **string** or **list of
+string**, the channel pattern or patterns to subscribe to if using
+`psubscribe`.
+
+**`input.redis.blpop`** optional **string** or **list of string**, the
+key or keys to pop items from if using `blpop`.
+
+**`input.redis.brpop`** optional **string** or **list of string**, the
+key or keys to pop items from if using `brpop`.
+
+One of the modes `subscribe`, `psubscribe`, `blpop` and `brpop` must
+be used.
+
+**`input.redis.wrap`** optional **string** or **object**, a wrapping
+directive which specifies that incoming data is not encoded events,
+and thus should be wrapped.
+
+**`input.redis.wrap.name`** required **string**, the name given to the
+events that wrap the input data.
+
+**`input.redis.wrap.raw`** optional **boolean**, whether to treat
 incoming data as plain text, not JSON.
 
 #### Wrapping
@@ -561,6 +625,68 @@ altered.
 **number** or **string**, the maximum amount of concurrent HTTP
 requests for the step. If omitted, it is set to the value of the
 `HTTP_CLIENT_DEFAULT_CONCURRENCY` environment variable or `10`.
+
+#### `send-redis`
+
+**`steps.<name>.(reduce|flatmap).send-redis`** **object**, a function
+that always sends forward the events in the vectors it receives,
+unmodified. It also sends those vectors to the specified redis
+instance or cluster.
+
+**`steps.<name>.(reduce|flatmap).send-redis.instance`** optional
+**string** or **object**, parameters required to connect to a single
+redis instance. If using a plain string, it must match the same
+restrictions as the `path` parameter described below.
+
+**`steps.<name>.(reduce|flatmap).send-redis.instance.path`** required
+**string**, a redis URL. Check te [ioredis
+documentation](https://github.com/luin/ioredis#connect-to-redis) for
+details.
+
+**`steps.<name>.(reduce|flatmap).send-redis.instance.options`**
+optional **object**, connection options as given to the ioredis
+library.
+
+**`steps.<name>.(reduce|flatmap).send-redis.cluster`** optional **list
+of ClusterNode** or **object**, parameters required to connect to a
+redis cluster. If using a list of cluster nodes, they must match the
+same restrictions as the `nodes` parameter described below.
+
+**`steps.<name>.(reduce|flatmap).send-redis.cluster.nodes`** required
+**list of ClusterNode**, a list of nodes to connect to
+initially. Check te [ioredis
+documentation](https://github.com/luin/ioredis#cluster) for details.
+
+**`steps.<name>.(reduce|flatmap).send-redis.cluster.options`**
+optional **object**, connection options as given to the ioredis
+library.
+
+One of `instance` or `cluster` must be used.
+
+**`steps.<name>.(reduce|flatmap).send-redis.publish`** optional
+**string** denoting the step function will forward events using the
+PUBLISH command to a channel, specified by the value given. The
+PUBLISH command is issued once for every event received.
+
+**`steps.<name>.(reduce|flatmap).send-redis.rpush`** optional
+**string** denoting the step function will forward events using the
+RPUSH command to a key, specified by the value given. The RPUSH
+command is issued once for every vector received.
+
+**`steps.<name>.(reduce|flatmap).send-redis.lpush`** optional
+**string** denoting the step function will forward events using the
+LPUSH command to a key, specified by the value given. The LPUSH
+command is issued once for every vector received.
+
+One of `publish`, `rpush` or `lpush` must be used.
+
+**`steps.<name>.(reduce|flatmap).send-redis.jq-expr`** optional
+**string**, specifies a `jq` filter to apply before forwarding
+events. If using a `jq` filter with `rpush` or `lpush`, the results of
+the filter will always be mapped on to different invocations of the
+corresponding command. This means that a trivial filter like `.` can
+be used to store lists of events instead of plain events in each
+element of a redis list.
 
 #### `expose-http`
 

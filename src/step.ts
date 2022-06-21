@@ -70,7 +70,7 @@ type Group = { events: Event[]; timeout: ReturnType<typeof setTimeout> | null };
 export const makeWindowingChannel = (
   options: StepOptions
 ): Channel<Event, Event[]> => {
-  const queue = new AsyncQueue<Event[]>();
+  const queue = new AsyncQueue<Event[]>(`step.${options.name}.window`);
   const currentGroups: Map<number, Group> = new Map();
   let currentGroupIndex = 0;
   const timeWindow =

@@ -16,7 +16,7 @@ afterEach(() => {
   mockedConsoleLog.mockRestore();
 });
 
-test("Send-stdout works as expected", async () => {
+test("@standalone Send-stdout works as expected", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", null);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
@@ -38,7 +38,7 @@ test("Send-stdout works as expected", async () => {
   ]);
 });
 
-test("Send-stdout works when using a jq program to preprocess the data", async () => {
+test("@standalone Send-stdout works when using a jq program to preprocess the data", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", {
     "jq-expr": ".[].d",

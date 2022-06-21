@@ -5,6 +5,55 @@ import { sendEvents, sendThing } from "../io/http-client";
 import { makeChannel } from "../io/jq";
 
 /**
+ * Options for this function.
+ */
+export type SendHTTPFunctionOptions =
+  | string
+  | {
+      target: string;
+      method?: "POST" | "PUT" | "PATCH";
+      ["jq-expr"]?: string;
+      headers?: { [key: string]: string | number | boolean };
+      concurrent?: number | string;
+    };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        target: { type: "string", minLength: 1 },
+        method: { enum: ["POST", "PUT", "PATCH"] },
+        "jq-expr": { type: "string", minLength: 1 },
+        headers: {
+          type: "object",
+          properties: {},
+          additionalProperties: {
+            anyOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+            ],
+          },
+        },
+        concurrent: {
+          anyOf: [
+            { type: "integer", minimum: 1 },
+            { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
+          ],
+        },
+      },
+      additionalProperties: false,
+      required: ["target"],
+    },
+  ],
+};
+
+/**
  * Function that sends events to a remote HTTP endpoint, ignores the
  * response and forwards the events to the pipeline.
  *
@@ -19,15 +68,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  options:
-    | string
-    | {
-        target: string;
-        method?: "POST" | "PUT" | "PATCH";
-        ["jq-expr"]?: string;
-        headers?: { [key: string]: string | number | boolean };
-        concurrent?: number | string;
-      }
+  options: SendHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
   const method =
@@ -61,7 +102,7 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
   } else {
     const accumulatingChannel: Channel<Event[], never> = drain(
-      new AsyncQueue<Event[]>().asChannel(),
+      new AsyncQueue<Event[]>("step.<?>.send-http.accumulating").asChannel(),
       async (events: Event[]) => {
         requests[i++] = sendEvents(events, target, method, headers);
         if (i === concurrent) {
@@ -76,7 +117,7 @@ export const make = async (
     forwarder = accumulatingChannel.send.bind(accumulatingChannel);
     closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
-  const queue = new AsyncQueue<Event[]>();
+  const queue = new AsyncQueue<Event[]>("step.<?>.send-http.forward");
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

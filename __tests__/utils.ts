@@ -13,7 +13,7 @@ afterEach(() => {
   mockedConsoleError.mockRestore();
 });
 
-test("Signatures can be obtained for any JSON-encodable thing", async () => {
+test("@standalone Signatures can be obtained for any JSON-encodable thing", async () => {
   const signature = await utils.getSignature(
     "foo",
     2,
@@ -25,11 +25,11 @@ test("Signatures can be obtained for any JSON-encodable thing", async () => {
   expect(signature).toBeTruthy();
 });
 
-test("Signatures can't be generated for non JSON-encodable things", async () => {
+test("@standalone Signatures can't be generated for non JSON-encodable things", async () => {
   await expect(utils.getSignature(undefined)).rejects.toThrow();
 });
 
-test("Signatures are distinct", async () => {
+test("@standalone Signatures are distinct", async () => {
   const s1 = await utils.getSignature("foo", "bar");
   const s2 = await utils.getSignature("foobar");
   const s3 = await utils.getSignature("foo", undefined, "bar");
@@ -38,7 +38,7 @@ test("Signatures are distinct", async () => {
   expect(s2).not.toEqual(s3);
 });
 
-test("Environment variables can be replaced in objects", () => {
+test("@standalone Environment variables can be replaced in objects", () => {
   const obj = {
     foo: "bar ${NODE_ENV}",
     baz: ["stuff", { "${NODE_ENV} key": "Look at this!" }],

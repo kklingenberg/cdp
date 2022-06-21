@@ -6,7 +6,7 @@ import { parseLines, parseJson } from "../../src/io/read-stream";
 // PARSE_BUFFER_SIZE is 32 when the test environment is
 // active. Changing that value explicitly will break them.
 
-test("Parsing lines is kindof equivalent to splitting on linebreaks", async () => {
+test("@standalone Parsing lines is kindof equivalent to splitting on linebreaks", async () => {
   const stream = Readable.from([
     "lorem\nipsum\r\ndo", // Any combination of linebreaks can be used.
     "lor\rsit\n", // Even a single carriage return.
@@ -21,17 +21,17 @@ test("Parsing lines is kindof equivalent to splitting on linebreaks", async () =
   ]);
 });
 
-test("An empty stream can be parsed", async () => {
+test("@standalone An empty stream can be parsed", async () => {
   const stream = Readable.from([]);
   expect(await consume(parseJson(stream))).toEqual([]);
 });
 
-test("A singleton stream can be parsed", async () => {
+test("@standalone A singleton stream can be parsed", async () => {
   const stream = Readable.from(["{}"]);
   expect(await consume(parseJson(stream))).toEqual([{}]);
 });
 
-test("A non-singleton stream can be parsed", async () => {
+test("@standalone A non-singleton stream can be parsed", async () => {
   const stream = Readable.from([
     ' {"hello": "world"}\n{"goodbye":',
     '"world"}',
@@ -42,7 +42,7 @@ test("A non-singleton stream can be parsed", async () => {
   ]);
 });
 
-test("A windows-style line-break is harmless", async () => {
+test("@standalone A windows-style line-break is harmless", async () => {
   const stream = Readable.from([
     ' {"hello": "world"}\r\n{"goodbye":',
     '"world"}',
@@ -53,7 +53,7 @@ test("A windows-style line-break is harmless", async () => {
   ]);
 });
 
-test("A trailing line break is harmless", async () => {
+test("@standalone A trailing line break is harmless", async () => {
   const stream = Readable.from([
     '{"hello": "world"}\n{"goodbye":',
     '"world"}\n',
@@ -64,7 +64,7 @@ test("A trailing line break is harmless", async () => {
   ]);
 });
 
-test("Objects exceeding the parse buffer size limit are dropped", async () => {
+test("@standalone Objects exceeding the parse buffer size limit are dropped", async () => {
   const stream = Readable.from([
     '{"hello": "world"}\n{"goodbye":',
     '"world", "this": "will be dropped because it exceeds 32 bytes',
@@ -76,7 +76,7 @@ test("Objects exceeding the parse buffer size limit are dropped", async () => {
   ]);
 });
 
-test("Lines containing invalid JSON are dropped", async () => {
+test("@standalone Lines containing invalid JSON are dropped", async () => {
   const stream = Readable.from([
     '{"hello": "world"}\nfoobarbaz',
     "lorem\n{",
@@ -88,7 +88,7 @@ test("Lines containing invalid JSON are dropped", async () => {
   ]);
 });
 
-test("Limited streams don't read past their limit", async () => {
+test("@standalone Limited streams don't read past their limit", async () => {
   const data = [
     '{"hello": "world"}\n{"goodbye":',
     '"world"}\n{"just": "kidding"}',

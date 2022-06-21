@@ -81,7 +81,7 @@ export const mapParse = <T>(
   const readLimit = limit ?? null;
   let totalRead = 0;
   let done = false;
-  const queue = new AsyncQueue<T>();
+  const queue = new AsyncQueue<T>("io.stream");
   // Accumulate chunks, attempting to parse linebreak-delimited data.
   stream.on("data", (data) => {
     if (done) {
@@ -114,16 +114,21 @@ export const mapParse = <T>(
     }
     if (readLimit !== null && totalRead >= readLimit) {
       logger.debug("Parsed stream achieved limit", readLimit);
-      done = true;
       stream.emit("end");
     }
   });
   // Attempt to parse whatever was left.
   stream.on("end", () => {
-    done = true;
-    extractLinesIntoQueue(fn, Buffer.concat(chunks), queue, true);
-    queue.close();
-    logger.debug("Parsed stream ended. Queue has", queue.data.length, "items");
+    if (!done) {
+      done = true;
+      extractLinesIntoQueue(fn, Buffer.concat(chunks), queue, true);
+      queue.close();
+      logger.debug(
+        "Parsed stream ended. Queue has",
+        queue.data.length,
+        "items"
+      );
+    }
   });
   // Attempt to parse whatever was left.
   stream.on("error", (err) => {

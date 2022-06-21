@@ -8,7 +8,7 @@ const dummyStepFactory = async () =>
 
 // Tests start here.
 
-test("Pipeline validation detects usage of the reserved step name", () => {
+test("@standalone Pipeline validation detects usage of the reserved step name", () => {
   // Arrange
   const pipeline = {
     name: "Test",
@@ -29,7 +29,7 @@ test("Pipeline validation detects usage of the reserved step name", () => {
   expect(() => validate(pipeline)).toThrow("reserved name");
 });
 
-test("Pipeline validation detects duplicate step names", () => {
+test("@standalone Pipeline validation detects duplicate step names", () => {
   // Arrange
   const pipeline = {
     name: "Test",
@@ -55,7 +55,7 @@ test("Pipeline validation detects duplicate step names", () => {
   expect(() => validate(pipeline)).toThrow("not unique");
 });
 
-test("Pipeline validation detects dangling dependencies", () => {
+test("@standalone Pipeline validation detects dangling dependencies", () => {
   // Arrange
   const pipeline = {
     name: "Test",
@@ -76,7 +76,7 @@ test("Pipeline validation detects dangling dependencies", () => {
   expect(() => validate(pipeline)).toThrow("dangling dependency");
 });
 
-test("Pipeline validation accepts a direct dependency to the input alias", () => {
+test("@standalone Pipeline validation accepts a direct dependency to the input alias", () => {
   // Arrange
   const pipeline = {
     name: "Test",
@@ -97,7 +97,7 @@ test("Pipeline validation accepts a direct dependency to the input alias", () =>
   expect(() => validate(pipeline)).not.toThrow();
 });
 
-test("Pipeline validation detects a trivial graph cycle", () => {
+test("@standalone Pipeline validation detects a trivial graph cycle", () => {
   // Arrange
   const pipeline = {
     name: "Test",
@@ -113,7 +113,7 @@ test("Pipeline validation detects a trivial graph cycle", () => {
   expect(() => validate(pipeline)).toThrow("dependency cycle");
 });
 
-test("Pipeline validation detects a graph cycle of greater length", () => {
+test("@standalone Pipeline validation detects a graph cycle of greater length", () => {
   // Arrange
   const pipeline = {
     name: "Test",
@@ -141,7 +141,7 @@ test("Pipeline validation detects a graph cycle of greater length", () => {
   );
 });
 
-test("Pipeline validation accepts shared dependencies", () => {
+test("@standalone Pipeline validation accepts shared dependencies", () => {
   // Arrange
   const pipeline = {
     name: "Test",

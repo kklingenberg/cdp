@@ -4,10 +4,39 @@ import {
   makeOldEventParser,
   parseChannel,
   WrapDirective,
+  wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
 } from "../event";
 import { makeChannel } from "../io/jq";
+
+/**
+ * Options for this function.
+ */
+export type SendReceiveJqFunctionOptions =
+  | string
+  | {
+      ["jq-expr"]: string;
+      wrap?: WrapDirective;
+    };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        "jq-expr": { type: "string", minLength: 1 },
+        wrap: wrapDirectiveSchema,
+      },
+      additionalProperties: false,
+      required: ["jq-expr"],
+    },
+  ],
+};
 
 /**
  * Function that transforms events using jq.
@@ -20,7 +49,7 @@ import { makeChannel } from "../io/jq";
 export const make = async (
   pipelineName: string,
   pipelineSignature: string,
-  options: string | { ["jq-expr"]: string; wrap?: WrapDirective }
+  options: SendReceiveJqFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const program = typeof options === "string" ? options : options["jq-expr"];
   const parse = chooseParser((typeof options === "string" ? {} : options).wrap);

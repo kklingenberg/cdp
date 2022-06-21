@@ -1,7 +1,9 @@
 ---
-name: "fourth"
+name: "fifth"
 input:
-  poll: "${SOURCE}"
+  redis:
+    instance: redis://redis:6379/0
+    psubscribe: "*-fifth"
 
 steps:
   debug:
@@ -15,11 +17,3 @@ steps:
             (.[].t | map(.p) | join(" --> ")),
             ")"
           ] | join("")
-
-  forward:
-    after:
-      - debug
-    flatmap:
-      send-redis:
-        instance: redis://redis:6379/0
-        publish: fourth-fifth

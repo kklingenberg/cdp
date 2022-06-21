@@ -12,6 +12,52 @@ import { makeChannel } from "../io/jq";
 const logger = makeLogger("step-functions/expose-http");
 
 /**
+ * Options for this function.
+ */
+export type ExposeHTTPFunctionOptions = {
+  endpoint: string;
+  port: number | string;
+  responses: number | string;
+  headers?: { [key: string]: string | string[] };
+  ["jq-expr"]?: string;
+};
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  type: "object",
+  properties: {
+    endpoint: { type: "string", minLength: 1, pattern: "^/.*$" },
+    port: {
+      anyOf: [
+        { type: "integer", minimum: 1, maximum: 65535 },
+        { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
+      ],
+    },
+    responses: {
+      anyOf: [
+        { type: "integer", minimum: 1 },
+        { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
+      ],
+    },
+    headers: {
+      type: "object",
+      properties: {},
+      additionalProperties: {
+        anyOf: [
+          { type: "string" },
+          { type: "array", items: { type: "string" } },
+        ],
+      },
+    },
+    "jq-expr": { type: "string", minLength: 1 },
+  },
+  additionalProperties: false,
+  required: ["endpoint", "port", "responses"],
+};
+
+/**
  * Add a thing to the given fully-sized slice at the next index, given
  * that the current index points to a previous location in the slice.
  *
@@ -91,13 +137,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  options: {
-    endpoint: string;
-    port: number | string;
-    responses: number | string;
-    headers?: { [key: string]: string | string[] };
-    ["jq-expr"]?: string;
-  }
+  options: ExposeHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const endpoint = options.endpoint.endsWith("/")
     ? options.endpoint.slice(0, -1)
@@ -141,7 +181,7 @@ export const make = async (
     );
   } else {
     responsesChannel = drain(
-      new AsyncQueue<Event[]>().asChannel(),
+      new AsyncQueue<Event[]>("step.<?>.expoes-http.accumulating").asChannel(),
       async (events: Event[]) => {
         const [key, response] = await makeEventWindowResponse(events);
         registerResponse(key, response);
@@ -207,7 +247,7 @@ export const make = async (
   const forwardingChannel = flatMap(async (events: Event[]) => {
     responsesChannel.send(events);
     return events;
-  }, new AsyncQueue<Event[]>().asChannel());
+  }, new AsyncQueue<Event[]>("step.<?>.expose-http.forward").asChannel());
   return {
     ...forwardingChannel,
     close: async () => {

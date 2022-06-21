@@ -22,7 +22,7 @@ class TestError extends Error {
   }
 }
 
-test("Request retrying works for all attempts", async () => {
+test("@standalone Request retrying works for all attempts", async () => {
   // Arrange
   mockRequest.mockImplementation(() =>
     Promise.reject(new TestError("test error", { status: 503 }))
@@ -32,7 +32,7 @@ test("Request retrying works for all attempts", async () => {
   expect(mockRequest).toHaveBeenCalledTimes(HTTP_CLIENT_MAX_RETRIES + 1);
 });
 
-test("Request retrying only works on 5xx status codes", async () => {
+test("@standalone Request retrying only works on 5xx status codes", async () => {
   // Arrange
   mockRequest.mockImplementation(() =>
     Promise.reject(new TestError("test error", { status: 400 }))
@@ -42,7 +42,7 @@ test("Request retrying only works on 5xx status codes", async () => {
   expect(mockRequest).toHaveBeenCalledTimes(1);
 });
 
-test("Request retrying can rescueue a request", async () => {
+test("@standalone Request retrying can rescueue a request", async () => {
   // Arrange
   mockRequest
     .mockImplementationOnce(() =>

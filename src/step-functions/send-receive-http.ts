@@ -1,7 +1,51 @@
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
-import { Event, WrapDirective } from "../event";
+import { Event, WrapDirective, wrapDirectiveSchema } from "../event";
 import { sendReceiveEvents, sendReceiveThing } from "../io/http-client";
 import { makeChannel } from "../io/jq";
+
+/**
+ * Options for this function.
+ */
+export type SendReceiveHTTPFunctionOptions =
+  | string
+  | {
+      target: string;
+      method?: "POST" | "PUT" | "PATCH";
+      ["jq-expr"]?: string;
+      headers?: { [key: string]: string | number | boolean };
+      wrap?: WrapDirective;
+    };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        target: { type: "string", minLength: 1 },
+        method: { enum: ["POST", "PUT", "PATCH"] },
+        "jq-expr": { type: "string", minLength: 1 },
+        headers: {
+          type: "object",
+          properties: {},
+          additionalProperties: {
+            anyOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+            ],
+          },
+        },
+        wrap: wrapDirectiveSchema,
+      },
+      additionalProperties: false,
+      required: ["target"],
+    },
+  ],
+};
 
 /**
  * Function that sends events to a remote HTTP endpoint, parses the
@@ -18,15 +62,7 @@ import { makeChannel } from "../io/jq";
 export const make = async (
   pipelineName: string,
   pipelineSignature: string,
-  options:
-    | string
-    | {
-        target: string;
-        method?: "POST" | "PUT" | "PATCH";
-        ["jq-expr"]?: string;
-        headers?: { [key: string]: string | number | boolean };
-        wrap?: WrapDirective;
-      }
+  options: SendReceiveHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
   const method =
@@ -51,7 +87,7 @@ export const make = async (
       jqChannel
     );
   } else {
-    const queue = new AsyncQueue<Event[]>();
+    const queue = new AsyncQueue<Event[]>("step.<?>.send-receive-http");
     return flatMap(
       (events: Event[]) =>
         sendReceiveEvents(

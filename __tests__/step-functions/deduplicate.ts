@@ -2,7 +2,7 @@ import { make as makeEvent } from "../../src/event";
 import { make } from "../../src/step-functions/deduplicate";
 import { consume } from "../test-utils";
 
-test("Deduplicate works as expected", async () => {
+test("@standalone Deduplicate works as expected", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", null);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
@@ -26,7 +26,7 @@ test("Deduplicate works as expected", async () => {
   expect(output.map((e) => e.data)).toEqual([3.14, 3.141, 3.1415]);
 });
 
-test("Deduplicate can consider specific parts of events", async () => {
+test("@standalone Deduplicate can consider specific parts of events", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", {
     "consider-name": false,

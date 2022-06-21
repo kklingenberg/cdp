@@ -2,7 +2,7 @@ import { make as makeEvent } from "../../src/event";
 import { make } from "../../src/step-functions/keep-when";
 import { consume } from "../test-utils";
 
-test("Keep-when works as expected", async () => {
+test("@standalone Keep-when works as expected", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", { type: "object" });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];

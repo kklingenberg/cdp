@@ -6,6 +6,7 @@ import {
   makeNewEventParser,
   parseChannel,
   WrapDirective,
+  wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
 } from "../event";
@@ -16,6 +17,53 @@ import { makeLogger } from "../log";
  * A logger instance namespaced to this module.
  */
 const logger = makeLogger("input/poll");
+
+/**
+ * Options for this input form.
+ */
+export type PollInputOptions =
+  | string
+  | {
+      target: string;
+      seconds?: number | string;
+      headers?: { [key: string]: string | number | boolean };
+      wrap?: WrapDirective;
+    };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        target: { type: "string", minLength: 1 },
+        seconds: {
+          anyOf: [
+            { type: "number", exclusiveMinimum: 0 },
+            { type: "string", pattern: "^[0-9]+\\.?[0-9]*$" },
+          ],
+        },
+        headers: {
+          type: "object",
+          properties: {},
+          additionalProperties: {
+            anyOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+            ],
+          },
+        },
+        wrap: wrapDirectiveSchema,
+      },
+      additionalProperties: false,
+      required: ["target"],
+    },
+  ],
+};
 
 /**
  * Creates an input channel based on data fetched periodically from
@@ -34,14 +82,7 @@ const logger = makeLogger("input/poll");
 export const make = (
   pipelineName: string,
   pipelineSignature: string,
-  options:
-    | string
-    | {
-        target: string;
-        seconds?: number | string;
-        headers?: { [key: string]: string | number | boolean };
-        wrap?: WrapDirective;
-      }
+  options: PollInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
   const parse = chooseParser(
     (typeof options === "string" ? {} : options)?.wrap
@@ -52,7 +93,7 @@ export const make = (
   const target = typeof options === "string" ? options : options.target;
   const headers = typeof options === "string" ? {} : options.headers ?? {};
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
-  const queue = new AsyncQueue<unknown>();
+  const queue = new AsyncQueue<unknown>("input.poll");
   // Keep a record of the latest ETag, so as to not duplicate events.
   let latestETag: string | null = null;
   // One poll is a GET request to the target.

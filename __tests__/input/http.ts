@@ -3,7 +3,7 @@ import { make } from "../../src/input/http";
 import { resolveAfter } from "../../src/utils";
 import { consume } from "../test-utils";
 
-test("The http input form works as expected", async () => {
+test("@standalone The http input form works as expected", async () => {
   // Arrange
   const [channel] = make("irrelevant", "irrelevant", {
     endpoint: "/events",

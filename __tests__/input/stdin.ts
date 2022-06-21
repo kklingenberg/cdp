@@ -15,7 +15,7 @@ afterEach(() => mockSTDINGetter.mockClear());
 import { make } from "../../src/input/stdin";
 import { consume } from "../test-utils";
 
-test("The stdin input form works as expected", async () => {
+test("@standalone The stdin input form works as expected", async () => {
   // Arrange
   const [channel] = make("irrelevant", "irrelevant", {
     wrap: { name: "test", raw: true },

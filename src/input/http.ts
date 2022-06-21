@@ -6,6 +6,7 @@ import {
   makeNewEventParser,
   parseChannel,
   WrapDirective,
+  wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
 } from "../event";
@@ -17,6 +18,37 @@ import { makeLogger } from "../log";
  * A logger instance namespaced to this module.
  */
 const logger = makeLogger("input/http");
+
+/**
+ * Options for this input form.
+ */
+export type HTTPInputOptions =
+  | string
+  | { endpoint: string; port?: number | string; wrap?: WrapDirective };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    { type: "string", minLength: 1, pattern: "^/.*$" },
+    {
+      type: "object",
+      properties: {
+        endpoint: { type: "string", minLength: 1, pattern: "^/.*$" },
+        port: {
+          anyOf: [
+            { type: "integer", minimum: 1, maximum: 65535 },
+            { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
+          ],
+        },
+        wrap: wrapDirectiveSchema,
+      },
+      additionalProperties: false,
+      required: ["endpoint"],
+    },
+  ],
+};
 
 /**
  * Creates an input channel based on data coming from HTTP. Returns a
@@ -34,9 +66,7 @@ const logger = makeLogger("input/http");
 export const make = (
   pipelineName: string,
   pipelineSignature: string,
-  options:
-    | string
-    | { endpoint: string; port?: number | string; wrap?: WrapDirective }
+  options: HTTPInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
   const parse = chooseParser(
     (typeof options === "string" ? {} : options)?.wrap
@@ -51,7 +81,7 @@ export const make = (
       : options.port ?? HTTP_SERVER_DEFAULT_PORT;
   const port = typeof rawPort === "string" ? parseInt(rawPort) : rawPort;
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
-  const queue = new AsyncQueue<unknown>();
+  const queue = new AsyncQueue<unknown>("input.http");
   const server = makeHTTPServer(port, async (ctx) => {
     logger.debug("Received request:", ctx.request.method, ctx.request.path);
     if (ctx.request.method === "POST" && ctx.request.path === endpoint) {

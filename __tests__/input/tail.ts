@@ -18,7 +18,7 @@ afterEach(() => {
   fs.rmdirSync(path.dirname(tmpFilePath));
 });
 
-test("The tail input form works as expected", async () => {
+test("@standalone The tail input form works as expected", async () => {
   // Arrange
   const [channel] = make("irrelevant", "irrelevant", {
     path: tmpFilePath,

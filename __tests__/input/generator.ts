@@ -2,7 +2,7 @@ import { make } from "../../src/input/generator";
 import { resolveAfter } from "../../src/utils";
 import { consume } from "../test-utils";
 
-test("The generator input form works as expected", async () => {
+test("@standalone The generator input form works as expected", async () => {
   // Arrange
   const [channel] = make("irrelevant", "irrelevant", {
     name: "test",

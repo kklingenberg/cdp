@@ -5,6 +5,7 @@ import {
   makeNewEventParser,
   parseChannel,
   WrapDirective,
+  wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
 } from "../event";
@@ -15,6 +16,26 @@ import { makeLogger } from "../log";
  * A logger instance namespaced to this module.
  */
 const logger = makeLogger("input/stdin");
+
+/**
+ * Options for this input form.
+ */
+export type STDINInputOptions = { wrap?: WrapDirective } | null;
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    {
+      type: "object",
+      properties: { wrap: wrapDirectiveSchema },
+      additionalProperties: false,
+      required: [],
+    },
+    { type: "null" },
+  ],
+};
 
 /**
  * Creates an input channel based on data coming from STDIN. Returns a
@@ -32,7 +53,7 @@ const logger = makeLogger("input/stdin");
 export const make = (
   pipelineName: string,
   pipelineSignature: string,
-  options: { wrap?: WrapDirective } | null
+  options: STDINInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
   const parse = chooseParser(
     (typeof options === "string" ? {} : options)?.wrap

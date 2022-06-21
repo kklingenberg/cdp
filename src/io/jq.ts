@@ -113,7 +113,9 @@ export const makeChannel = async <T>(
   });
   await precondition;
   const parseStream = parse ?? parseJson;
-  const bufferChannel: Channel<T, T> = new AsyncQueue<T>().asChannel();
+  const bufferChannel: Channel<T, T> = new AsyncQueue<T>(
+    "io.jq.buffer"
+  ).asChannel();
   const feedEnded: Promise<void> = (async () => {
     for await (const value of bufferChannel.receive) {
       const flushed = child.stdin.write(JSON.stringify(value) + "\n");

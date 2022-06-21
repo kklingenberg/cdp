@@ -8,6 +8,7 @@ import {
   makeNewEventParser,
   parseChannel,
   WrapDirective,
+  wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
 } from "../event";
@@ -17,6 +18,32 @@ import { makeLogger } from "../log";
  * A logger instance namespaced to this module.
  */
 const logger = makeLogger("input/tail");
+
+/**
+ * Options for this input form.
+ */
+export type TailInputOptions =
+  | string
+  | { path: string; ["start-at"]?: "start" | "end"; wrap?: WrapDirective };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        path: { type: "string", minLength: 1 },
+        "start-at": { enum: ["start", "end"] },
+        wrap: wrapDirectiveSchema,
+      },
+      additionalProperties: false,
+      required: ["path"],
+    },
+  ],
+};
 
 /**
  * Creates an input channel based on data coming from a file. Returns
@@ -34,9 +61,7 @@ const logger = makeLogger("input/tail");
 export const make = (
   pipelineName: string,
   pipelineSignature: string,
-  options:
-    | string
-    | { path: string; ["start-at"]?: "start" | "end"; wrap?: WrapDirective }
+  options: TailInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
   const parse = chooseParser(
     (typeof options === "string" ? {} : options)?.wrap
@@ -48,7 +73,7 @@ export const make = (
   const startPos =
     typeof options === "string" ? "end" : options["start-at"] ?? "end";
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
-  const queue = new AsyncQueue<unknown>();
+  const queue = new AsyncQueue<unknown>("input.tail");
   // Wrap the queue's channel to make it look like an input channel.
   let notifyDrained: () => void;
   const drained: Promise<void> = new Promise((resolve) => {

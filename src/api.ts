@@ -1,17 +1,7 @@
 import { match, P } from "ts-pattern";
 import { flatMap, compose } from "./async-queue";
 import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
-import {
-  Event,
-  WrapDirective,
-  wrapDirectiveSchema,
-  validateWrap,
-} from "./event";
-import { make as makeGeneratorInput } from "./input/generator";
-import { make as makeSTDINInput } from "./input/stdin";
-import { make as makeTailInput } from "./input/tail";
-import { make as makeHTTPInput } from "./input/http";
-import { make as makePollInput } from "./input/poll";
+import { Event, validateWrap } from "./event";
 import { isHealthy } from "./io/jq";
 import { makeLogger } from "./log";
 import {
@@ -28,17 +18,94 @@ import {
 } from "./pattern";
 import { StepDefinition, Pipeline, validate, run } from "./pipeline";
 import { makeWindowed } from "./step";
-import { make as makeDeduplicateFunction } from "./step-functions/deduplicate";
-import { make as makeKeepFunction } from "./step-functions/keep";
-import { make as makeKeepWhenFunction } from "./step-functions/keep-when";
-import { make as makeRenameFunction } from "./step-functions/rename";
-import { make as makeExposeHTTPFunction } from "./step-functions/expose-http";
-import { make as makeSendHTTPFunction } from "./step-functions/send-http";
-import { make as makeSendReceiveHTTPFunction } from "./step-functions/send-receive-http";
-import { make as makeSendReceiveJqFunction } from "./step-functions/send-receive-jq";
-import { make as makeSendFileFunction } from "./step-functions/send-file";
-import { make as makeSendSTDOUTFunction } from "./step-functions/send-stdout";
 import { ajv, compileThrowing, getSignature, resolveAfter } from "./utils";
+// Input forms
+import {
+  GeneratorInputOptions,
+  optionsSchema as generatorInputOptionsSchema,
+  make as makeGeneratorInput,
+} from "./input/generator";
+import {
+  STDINInputOptions,
+  optionsSchema as stdinInputOptionsSchema,
+  make as makeSTDINInput,
+} from "./input/stdin";
+import {
+  TailInputOptions,
+  optionsSchema as tailInputOptionsSchema,
+  make as makeTailInput,
+} from "./input/tail";
+import {
+  HTTPInputOptions,
+  optionsSchema as httpInputOptionsSchema,
+  make as makeHTTPInput,
+} from "./input/http";
+import {
+  PollInputOptions,
+  optionsSchema as pollInputOptionsSchema,
+  make as makePollInput,
+} from "./input/poll";
+import {
+  RedisInputOptions,
+  optionsSchema as redisInputOptionsSchema,
+  make as makeRedisInput,
+} from "./input/redis";
+// Step functions
+import {
+  DeduplicateFunctionOptions,
+  optionsSchema as deduplicateFunctionOptionsSchema,
+  make as makeDeduplicateFunction,
+} from "./step-functions/deduplicate";
+import {
+  KeepFunctionOptions,
+  optionsSchema as keepFunctionOptionsSchema,
+  make as makeKeepFunction,
+} from "./step-functions/keep";
+import {
+  KeepWhenFunctionOptions,
+  optionsSchema as keepWhenFunctionOptionsSchema,
+  make as makeKeepWhenFunction,
+} from "./step-functions/keep-when";
+import {
+  RenameFunctionOptions,
+  optionsSchema as renameFunctionOptionsSchema,
+  make as makeRenameFunction,
+} from "./step-functions/rename";
+import {
+  ExposeHTTPFunctionOptions,
+  optionsSchema as exposeHTTPFunctionOptionsSchema,
+  make as makeExposeHTTPFunction,
+} from "./step-functions/expose-http";
+import {
+  SendRedisFunctionOptions,
+  optionsSchema as sendRedisFunctionOptionsSchema,
+  make as makeSendRedisFunction,
+} from "./step-functions/send-redis";
+import {
+  SendHTTPFunctionOptions,
+  optionsSchema as sendHTTPFunctionOptionsSchema,
+  make as makeSendHTTPFunction,
+} from "./step-functions/send-http";
+import {
+  SendReceiveHTTPFunctionOptions,
+  optionsSchema as sendReceiveHTTPFunctionOptionsSchema,
+  make as makeSendReceiveHTTPFunction,
+} from "./step-functions/send-receive-http";
+import {
+  SendReceiveJqFunctionOptions,
+  optionsSchema as sendReceiveJqFunctionOptionsSchema,
+  make as makeSendReceiveJqFunction,
+} from "./step-functions/send-receive-jq";
+import {
+  SendFileFunctionOptions,
+  optionsSchema as sendFileFunctionOptionsSchema,
+  make as makeSendFileFunction,
+} from "./step-functions/send-file";
+import {
+  SendSTDOUTFunctionOptions,
+  optionsSchema as sendSTDOUTFunctionOptionsSchema,
+  make as makeSendSTDOUTFunction,
+} from "./step-functions/send-stdout";
 
 /**
  * A logger instance namespaced to this module.
@@ -46,603 +113,72 @@ import { ajv, compileThrowing, getSignature, resolveAfter } from "./utils";
 const logger = makeLogger("api");
 
 /**
- * The `generator` input produces events at a regular rate.
+ * Build an ajv schema for an object with a single key and a subschema
+ * for the value.
+ *
+ * @param key The single key found in the expected objects.
+ * @param schema The schema for the value mapped to the key.
+ * @returns A schema for the wrapped objects.
  */
-interface GeneratorInputTemplate {
-  generator: { name?: string; seconds?: number | string } | string | null;
-}
-const generatorInputTemplateSchema = {
+const makeWrapperSchema = (key: string, schema: object) => ({
   type: "object",
-  properties: {
-    generator: {
-      anyOf: [
-        {
-          type: "object",
-          properties: {
-            name: { type: "string", minLength: 1 },
-            seconds: {
-              anyOf: [
-                { type: "number", exclusiveMinimum: 0 },
-                { type: "string", pattern: "^[0-9]+\\.?[0-9]*$" },
-              ],
-            },
-          },
-          additionalProperties: false,
-          required: [],
-        },
-        { type: "string", minLength: 1 },
-        { type: "null" },
-      ],
-    },
-  },
+  properties: { [key]: schema },
   additionalProperties: false,
-  required: ["generator"],
-};
-
-/**
- * The `stdin` input form ingests events from STDIN.
- */
-interface STDINInputTemplate {
-  stdin: { wrap?: WrapDirective } | null;
-}
-const stdinInputTemplateSchema = {
-  type: "object",
-  properties: {
-    stdin: {
-      anyOf: [
-        {
-          type: "object",
-          properties: { wrap: wrapDirectiveSchema },
-          additionalProperties: false,
-          required: [],
-        },
-        { type: "null" },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["stdin"],
-};
-
-/**
- * The `tail` input form ingests events from a file.
- */
-interface TailInputTemplate {
-  tail:
-    | string
-    | { path: string; ["start-at"]?: "start" | "end"; wrap?: WrapDirective };
-}
-const tailInputTemplateSchema = {
-  type: "object",
-  properties: {
-    tail: {
-      anyOf: [
-        { type: "string", minLength: 1 },
-        {
-          type: "object",
-          properties: {
-            path: { type: "string", minLength: 1 },
-            "start-at": { enum: ["start", "end"] },
-            wrap: wrapDirectiveSchema,
-          },
-          additionalProperties: false,
-          required: ["path"],
-        },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["tail"],
-};
-
-/**
- * The `http` input form ingests events at an HTTP endpoint.
- */
-interface HTTPInputTemplate {
-  http:
-    | string
-    | {
-        endpoint: string;
-        port?: number | string;
-        wrap?: WrapDirective;
-      };
-}
-const httpInputTemplateSchema = {
-  type: "object",
-  properties: {
-    http: {
-      anyOf: [
-        { type: "string", minLength: 1, pattern: "^/.*$" },
-        {
-          type: "object",
-          properties: {
-            endpoint: { type: "string", minLength: 1, pattern: "^/.*$" },
-            port: {
-              anyOf: [
-                { type: "integer", minimum: 1, maximum: 65535 },
-                { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
-              ],
-            },
-            wrap: wrapDirectiveSchema,
-          },
-          additionalProperties: false,
-          required: ["endpoint"],
-        },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["http"],
-};
-
-/**
- * The `poll` input form pulls events by executing HTTP GET requests.
- */
-interface PollInputTemplate {
-  poll:
-    | string
-    | {
-        target: string;
-        seconds?: number | string;
-        headers?: { [key: string]: string | number | boolean };
-        wrap?: WrapDirective;
-      };
-}
-const pollInputTemplateSchema = {
-  type: "object",
-  properties: {
-    poll: {
-      anyOf: [
-        { type: "string", minLength: 1 },
-        {
-          type: "object",
-          properties: {
-            target: { type: "string", minLength: 1 },
-            seconds: {
-              anyOf: [
-                { type: "number", exclusiveMinimum: 0 },
-                { type: "string", pattern: "^[0-9]+\\.?[0-9]*$" },
-              ],
-            },
-            headers: {
-              type: "object",
-              properties: {},
-              additionalProperties: {
-                anyOf: [
-                  { type: "string" },
-                  { type: "number" },
-                  { type: "boolean" },
-                ],
-              },
-            },
-            wrap: wrapDirectiveSchema,
-          },
-          additionalProperties: false,
-          required: ["target"],
-        },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["poll"],
-};
+  required: [key],
+});
 
 /**
  * An input template is one of the provided ones.
  **/
 type InputTemplate =
-  | GeneratorInputTemplate
-  | STDINInputTemplate
-  | TailInputTemplate
-  | HTTPInputTemplate
-  | PollInputTemplate;
+  | { generator: GeneratorInputOptions }
+  | { stdin: STDINInputOptions }
+  | { tail: TailInputOptions }
+  | { http: HTTPInputOptions }
+  | { poll: PollInputOptions }
+  | { redis: RedisInputOptions };
 const inputTemplateSchema = {
   anyOf: [
-    generatorInputTemplateSchema,
-    stdinInputTemplateSchema,
-    tailInputTemplateSchema,
-    httpInputTemplateSchema,
-    pollInputTemplateSchema,
+    makeWrapperSchema("generator", generatorInputOptionsSchema),
+    makeWrapperSchema("stdin", stdinInputOptionsSchema),
+    makeWrapperSchema("tail", tailInputOptionsSchema),
+    makeWrapperSchema("http", httpInputOptionsSchema),
+    makeWrapperSchema("poll", pollInputOptionsSchema),
+    makeWrapperSchema("redis", redisInputOptionsSchema),
   ],
-};
-
-/**
- * A `rename` function changes the name of the events it receives.
- */
-interface RenameFunctionTemplate {
-  rename:
-    | {
-        append?: string;
-        prepend?: string;
-      }
-    | { replace: string };
-}
-const renameFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    rename: {
-      anyOf: [
-        {
-          type: "object",
-          properties: {
-            append: { type: "string", minLength: 1 },
-            prepend: { type: "string", minLength: 1 },
-          },
-          additionalProperties: false,
-          required: [],
-        },
-        {
-          type: "object",
-          properties: {
-            replace: { type: "string", minLength: 1 },
-          },
-          additionalProperties: false,
-          required: ["replace"],
-        },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["rename"],
-};
-
-/**
- * A `deduplicate` function removes event duplicates from the batches
- * it receives, considering various pieces of the events.
- */
-interface DeduplicateFunctionTemplate {
-  deduplicate: {
-    ["consider-name"]?: boolean;
-    ["consider-data"]?: boolean;
-    ["consider-trace"]?: boolean;
-  } | null;
-}
-const deduplicateFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    deduplicate: {
-      anyOf: [
-        {
-          type: "object",
-          properties: {
-            "consider-name": { type: "boolean" },
-            "consider-data": { type: "boolean" },
-            "consider-trace": { type: "boolean" },
-          },
-          additionalProperties: false,
-          required: [],
-        },
-        { type: "null" },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["deduplicate"],
-};
-
-/**
- * A `keep` function limits event batches to a specific size, after
- * windowing.
- */
-interface KeepFunctionTemplate {
-  keep: number | string;
-}
-const keepFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    keep: {
-      anyOf: [
-        { type: "integer", minimum: 1 },
-        { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["keep"],
-};
-
-/**
- * A `keep-when` function removes events that don't comply with a
- * specific jsonschema.
- */
-interface KeepWhenFunctionTemplate {
-  ["keep-when"]: object;
-}
-const keepWhenFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    "keep-when": { type: "object" },
-  },
-  additionalProperties: false,
-  required: ["keep-when"],
-};
-
-/**
- * A `send-stdout` function emits events as serialized JSON to STDOUT,
- * and forwards the received events as-is to the rest of the pipeline.
- */
-interface SendSTDOUTFunctionTemplate {
-  ["send-stdout"]: {
-    ["jq-expr"]?: string;
-  } | null;
-}
-const sendSTDOUTFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    "send-stdout": {
-      anyOf: [
-        {
-          type: "object",
-          properties: {
-            "jq-expr": { type: "string", minLength: 1 },
-          },
-          additionalProperties: false,
-          required: [],
-        },
-        { type: "null" },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["send-stdout"],
-};
-
-/**
- * A `send-file` function appends events as serialized JSON to the
- * specified file, and forwards the received events as-is to the rest
- * of the pipeline.
- */
-interface SendFileFunctionTemplate {
-  ["send-file"]:
-    | string
-    | {
-        path: string;
-        ["jq-expr"]?: string;
-      };
-}
-const sendFileFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    "send-file": {
-      anyOf: [
-        { type: "string", minLength: 1 },
-        {
-          type: "object",
-          properties: {
-            path: { type: "string", minLength: 1 },
-            "jq-expr": { type: "string", minLength: 1 },
-          },
-          additionalProperties: false,
-          required: ["path"],
-        },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["send-file"],
-};
-
-/**
- * A `send-http` function emits event batches to a remote HTTP
- * endpoint, ignores the response entirely and forwards the original
- * events to the rest of the pipeline.
- */
-interface SendHTTPFunctionTemplate {
-  ["send-http"]:
-    | string
-    | {
-        target: string;
-        method?: "POST" | "PUT" | "PATCH";
-        ["jq-expr"]?: string;
-        headers?: { [key: string]: string | number | boolean };
-        concurrent?: number | string;
-      };
-}
-const sendHTTPFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    "send-http": {
-      anyOf: [
-        { type: "string", minLength: 1 },
-        {
-          type: "object",
-          properties: {
-            target: { type: "string", minLength: 1 },
-            method: { enum: ["POST", "PUT", "PATCH"] },
-            "jq-expr": { type: "string", minLength: 1 },
-            headers: {
-              type: "object",
-              properties: {},
-              additionalProperties: {
-                anyOf: [
-                  { type: "string" },
-                  { type: "number" },
-                  { type: "boolean" },
-                ],
-              },
-            },
-            concurrent: {
-              anyOf: [
-                { type: "integer", minimum: 1 },
-                { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
-              ],
-            },
-          },
-          additionalProperties: false,
-          required: ["target"],
-        },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["send-http"],
-};
-
-/**
- * An `expose-http` function keeps a buffer of windows that it exposes
- * in an HTTP server.
- */
-interface ExposeHTTPFunctionTemplate {
-  ["expose-http"]: {
-    endpoint: string;
-    port: number | string;
-    responses: number | string;
-    headers?: { [key: string]: string | string[] };
-    ["jq-expr"]?: string;
-  };
-}
-const exposeHTTPFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    "expose-http": {
-      type: "object",
-      properties: {
-        endpoint: { type: "string", minLength: 1, pattern: "^/.*$" },
-        port: {
-          anyOf: [
-            { type: "integer", minimum: 1, maximum: 65535 },
-            { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
-          ],
-        },
-        responses: {
-          anyOf: [
-            { type: "integer", minimum: 1 },
-            { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
-          ],
-        },
-        headers: {
-          type: "object",
-          properties: {},
-          additionalProperties: {
-            anyOf: [
-              { type: "string" },
-              { type: "array", items: { type: "string" } },
-            ],
-          },
-        },
-        "jq-expr": { type: "string", minLength: 1 },
-      },
-      additionalProperties: false,
-      required: ["endpoint", "port", "responses"],
-    },
-  },
-  additionalProperties: false,
-  required: ["expose-http"],
-};
-
-/**
- * A `send-receive-jq` function processes batches of events with a jq
- * program, and the transformed events are sent back to the rest of
- * the pipeline.
- */
-interface SendReceiveJqFunctionTemplate {
-  ["send-receive-jq"]:
-    | string
-    | {
-        ["jq-expr"]: string;
-        wrap?: WrapDirective;
-      };
-}
-const sendReceiveJqFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    "send-receive-jq": {
-      anyOf: [
-        { type: "string", minLength: 1 },
-        {
-          type: "object",
-          properties: {
-            "jq-expr": { type: "string", minLength: 1 },
-            wrap: wrapDirectiveSchema,
-          },
-          additionalProperties: false,
-          required: ["jq-expr"],
-        },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["send-receive-jq"],
-};
-
-/**
- * A `send-receive-http` function processes batches of events with a
- * remote HTTP service. The service is expected to respond with the
- * transformed events, which get forwarded to the rest of the
- * pipeline.
- */
-interface SendReceiveHTTPFunctionTemplate {
-  ["send-receive-http"]:
-    | string
-    | {
-        target: string;
-        method?: "POST" | "PUT" | "PATCH";
-        ["jq-expr"]?: string;
-        headers?: { [key: string]: string | number | boolean };
-        wrap?: WrapDirective;
-      };
-}
-const sendReceiveHTTPFunctionTemplateSchema = {
-  type: "object",
-  properties: {
-    "send-receive-http": {
-      anyOf: [
-        { type: "string", minLength: 1 },
-        {
-          type: "object",
-          properties: {
-            target: { type: "string", minLength: 1 },
-            method: { enum: ["POST", "PUT", "PATCH"] },
-            "jq-expr": { type: "string", minLength: 1 },
-            headers: {
-              type: "object",
-              properties: {},
-              additionalProperties: {
-                anyOf: [
-                  { type: "string" },
-                  { type: "number" },
-                  { type: "boolean" },
-                ],
-              },
-            },
-            wrap: wrapDirectiveSchema,
-          },
-          additionalProperties: false,
-          required: ["target"],
-        },
-      ],
-    },
-  },
-  additionalProperties: false,
-  required: ["send-receive-http"],
 };
 
 /**
  * A step function template is one of the provided ones.
  **/
 type StepFunctionTemplate =
-  | RenameFunctionTemplate
-  | DeduplicateFunctionTemplate
-  | KeepFunctionTemplate
-  | KeepWhenFunctionTemplate
-  | SendSTDOUTFunctionTemplate
-  | SendFileFunctionTemplate
-  | SendHTTPFunctionTemplate
-  | ExposeHTTPFunctionTemplate
-  | SendReceiveJqFunctionTemplate
-  | SendReceiveHTTPFunctionTemplate;
+  | { rename: RenameFunctionOptions }
+  | { deduplicate: DeduplicateFunctionOptions }
+  | { keep: KeepFunctionOptions }
+  | { "keep-when": KeepWhenFunctionOptions }
+  | { "send-stdout": SendSTDOUTFunctionOptions }
+  | { "send-file": SendFileFunctionOptions }
+  | { "send-http": SendHTTPFunctionOptions }
+  | { "send-redis": SendRedisFunctionOptions }
+  | { "expose-http": ExposeHTTPFunctionOptions }
+  | { "send-receive-jq": SendReceiveJqFunctionOptions }
+  | { "send-receive-http": SendReceiveHTTPFunctionOptions };
 const stepFunctionTemplateSchema = {
   anyOf: [
-    renameFunctionTemplateSchema,
-    deduplicateFunctionTemplateSchema,
-    keepFunctionTemplateSchema,
-    keepWhenFunctionTemplateSchema,
-    sendSTDOUTFunctionTemplateSchema,
-    sendFileFunctionTemplateSchema,
-    sendHTTPFunctionTemplateSchema,
-    exposeHTTPFunctionTemplateSchema,
-    sendReceiveJqFunctionTemplateSchema,
-    sendReceiveHTTPFunctionTemplateSchema,
+    makeWrapperSchema("rename", renameFunctionOptionsSchema),
+    makeWrapperSchema("deduplicate", deduplicateFunctionOptionsSchema),
+    makeWrapperSchema("keep", keepFunctionOptionsSchema),
+    makeWrapperSchema("keep-when", keepWhenFunctionOptionsSchema),
+    makeWrapperSchema("send-stdout", sendSTDOUTFunctionOptionsSchema),
+    makeWrapperSchema("send-file", sendFileFunctionOptionsSchema),
+    makeWrapperSchema("send-http", sendHTTPFunctionOptionsSchema),
+    makeWrapperSchema("send-redis", sendRedisFunctionOptionsSchema),
+    makeWrapperSchema("expose-http", exposeHTTPFunctionOptionsSchema),
+    makeWrapperSchema("send-receive-jq", sendReceiveJqFunctionOptionsSchema),
+    makeWrapperSchema(
+      "send-receive-http",
+      sendReceiveHTTPFunctionOptionsSchema
+    ),
   ],
 };
 
@@ -799,6 +335,11 @@ export const makePipelineTemplate = (rawThing: unknown): PipelineTemplate => {
       validateWrap(wrap, "the input's wrap option")
     )
   );
+  check(
+    matchInput.with({ redis: { wrap: P.select() } }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
   // 2. Check each step.
   Object.entries(thing.steps ?? {}).forEach(([name, definition]) => {
     const matchStep = match(definition);
@@ -922,6 +463,7 @@ export const runPipeline = async (
   deadEvents.set(0);
   // Create the input channel.
   const [inputChannel, inputEnded] = match(template.input)
+    .with({ redis: P.select() }, (c) => makeRedisInput(...ctx, c))
     .with({ poll: P.select() }, (c) => makePollInput(...ctx, c))
     .with({ http: P.select() }, (c) => makeHTTPInput(...ctx, c))
     .with({ tail: P.select() }, (c) => makeTailInput(...ctx, c))
@@ -967,6 +509,9 @@ export const runPipeline = async (
       )
       .with({ "expose-http": P.select() }, (f) =>
         makeExposeHTTPFunction(...ctx, f)
+      )
+      .with({ "send-redis": P.select() }, (f) =>
+        makeSendRedisFunction(...ctx, f)
       )
       .with({ "send-http": P.select() }, (f) => makeSendHTTPFunction(...ctx, f))
       .with({ "send-file": P.select() }, (f) => makeSendFileFunction(...ctx, f))

@@ -26,6 +26,6 @@ export const consume = async <T>(
 };
 
 // Provide an empty test to appease jest.
-test("Nothing", () => {
+test("@standalone Nothing", () => {
   // Empty test.
 });

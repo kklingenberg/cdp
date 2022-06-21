@@ -2,7 +2,7 @@ import { make as makeEvent } from "../../src/event";
 import { make } from "../../src/step-functions/keep";
 import { consume } from "../test-utils";
 
-test("Keep works as expected", async () => {
+test("@standalone Keep works as expected", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", 3);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
@@ -26,7 +26,7 @@ test("Keep works as expected", async () => {
   expect(output.map((e) => e.data)).toEqual([1, 2, 3]);
 });
 
-test("Keep doesn't fail if the incoming event vector has fewer events", async () => {
+test("@standalone Keep doesn't fail if the incoming event vector has fewer events", async () => {
   // Arrange
   const channel = await make("irrelevant", "irrelevant", "3");
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
