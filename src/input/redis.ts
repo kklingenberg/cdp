@@ -18,6 +18,8 @@ import {
   RedisConnection,
 } from "../io/redis";
 import { makeLogger } from "../log";
+import { backpressure } from "../metrics";
+import { resolveAfter } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -177,10 +179,9 @@ export const make = (
         await Promise.race([
           (async () => {
             while (!isDone) {
-              const result = await client.blpop(
-                toargs(options.blpop),
-                POP_TIMEOUT
-              );
+              const result = await (backpressure.status()
+                ? resolveAfter(POP_TIMEOUT * 1000).then(() => null)
+                : client.blpop(toargs(options.blpop), POP_TIMEOUT));
               if (result !== null) {
                 logger.debug(
                   "Got message from redis list",
@@ -203,10 +204,9 @@ export const make = (
         await Promise.race([
           (async () => {
             while (!isDone) {
-              const result = await client.brpop(
-                toargs(options.brpop),
-                POP_TIMEOUT
-              );
+              const result = await (backpressure.status()
+                ? resolveAfter(POP_TIMEOUT * 1000).then(() => null)
+                : client.brpop(toargs(options.brpop), POP_TIMEOUT));
               if (result !== null) {
                 logger.debug(
                   "Got message from redis list",

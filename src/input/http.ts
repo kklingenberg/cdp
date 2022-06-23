@@ -13,6 +13,7 @@ import {
 import { makeHTTPServer } from "../io/http-server";
 import { isHealthy } from "../io/jq";
 import { makeLogger } from "../log";
+import { backpressure } from "../metrics";
 
 /**
  * A logger instance namespaced to this module.
@@ -85,12 +86,16 @@ export const make = (
   const server = makeHTTPServer(port, async (ctx) => {
     logger.debug("Received request:", ctx.request.method, ctx.request.path);
     if (ctx.request.method === "POST" && ctx.request.path === endpoint) {
-      logger.debug("Received events payload:", ctx.request.length, "bytes");
-      arrivalTimestamp.update();
-      for await (const thing of parse(ctx.req, ctx.request.length)) {
-        queue.push(wrapper(thing));
+      if (backpressure.status()) {
+        ctx.status = 503;
+      } else {
+        logger.debug("Received events payload:", ctx.request.length, "bytes");
+        arrivalTimestamp.update();
+        for await (const thing of parse(ctx.req, ctx.request.length)) {
+          queue.push(wrapper(thing));
+        }
+        ctx.body = null;
       }
-      ctx.body = null;
     } else if (
       ctx.request.method === "GET" &&
       ctx.request.path === HTTP_SERVER_HEALTH_ENDPOINT

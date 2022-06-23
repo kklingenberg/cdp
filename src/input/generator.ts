@@ -1,6 +1,7 @@
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event, arrivalTimestamp, makeNewEventParser } from "../event";
 import { makeLogger } from "../log";
+import { backpressure } from "../metrics";
 
 /**
  * A logger instance namespaced to this module.
@@ -73,10 +74,11 @@ export const make = (
       : options.seconds ?? 1;
   const intervalDuration = durationSeconds * 1000;
   const queue = new AsyncQueue<number>("input.generator");
-  const interval = setInterval(
-    () => queue.push(Math.random()),
-    intervalDuration
-  );
+  const interval = setInterval(() => {
+    if (!backpressure.status()) {
+      queue.push(Math.random());
+    }
+  }, intervalDuration);
   const channel = flatMap(async (d) => {
     arrivalTimestamp.update();
     const event = await eventParser({ n, d });
