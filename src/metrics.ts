@@ -84,6 +84,11 @@ export const backpressure = (() => {
       return state;
     },
     update(v: boolean) {
+      if (v && !state) {
+        logger.info("Pipeline is signalling backpressure");
+      } else if (!v && state) {
+        logger.info("Pipeline stopped signalling backpressure");
+      }
       state = v;
       return this;
     },

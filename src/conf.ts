@@ -329,7 +329,7 @@ export const BACKPRESSURE_HEAP_USED: number | null = fromEnv(
  * count of events.
  */
 export const BACKPRESSURE_QUEUED_EVENTS: number | null = fromEnv(
-  "BACKPRESSURE_HEAP_USED",
+  "BACKPRESSURE_QUEUED_EVENTS",
   JSON.parse,
   compileThrowing({ type: "integer", minimum: 1 })
 );

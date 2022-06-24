@@ -53,6 +53,11 @@ Optionally check the logs of the CDP program with:
 docker compose logs -f cdp
 ```
 
+Also consider altering the [`docker-compose.yml`](docker-compose.yml)
+file with [backpressure thresholds](/../../#backpressure) for the CDP
+service so that the pipeline avoids crashing by pausing the input
+channel.
+
 ## Get insights
 
 One common strategy to get a concrete result is to increase the
