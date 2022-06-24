@@ -157,6 +157,14 @@ Input forms follow the schema:
 **`input`** required **object**, a structure containing a single input
 form.
 
+Most input forms implement an event-generating channel that can be
+paused by backpressure signals. Some input forms only support pausing
+for a few configuration permutations. Check each input form for
+details.
+
+To configure backpressure triggering, check the
+[Backpressure](#backpressure) section below.
+
 #### `generator`
 
 **`input.generator`** **object** or **string** or **null**, the input
@@ -165,6 +173,9 @@ most useful for testing pipelines before using the definitive input
 form. If given as a string, it's set to be the name of the events
 generated. If given as empty or null, the name of the events is set to
 `"_"`.
+
+The `generator` input form reacts to backpressure signals by skipping
+event generation.
 
 **`input.generator.name`** optional **string**, the name of the events
 that the input form will generate. It defaults to `"_"`.
@@ -177,6 +188,8 @@ form. Defaults to `1` for one second.
 
 **`input.stdin`** **object** or **null**, the input form that makes a
 pipeline read source data from standard input.
+
+The `stdin` input form doesn't react to backpressure signals.
 
 **`input.stdin.wrap`** optional **string** or **object**, a wrapping
 directive which specifies that incoming data is not encoded events,
@@ -193,6 +206,8 @@ incoming data as plain text, not JSON.
 **`input.tail`** **string** or **object**, the input form that makes a
 pipeline read source data from (the tail of) a file. If given a
 string, it will be interpreted as the path to the file to be read.
+
+The `tail` input form doesn't react to backpressure signals.
 
 **`input.tail.path`** required **string**, the path to the file to be
 read.
@@ -220,6 +235,11 @@ incoming data as plain text, not JSON.
 pipeline receive source data from HTTP POST requests. If given as a
 string, it indicates the path that will receive requests with source data.
 
+The `http` input form reacts to backpressure signals by responding to
+requests with a 503 response. Clients should interpret such responses
+as cues to retry the request for a while, e.g. using exponential
+backoff.
+
 **`input.http.endpoint`** required **string**, indicates the path that
 will receive requests with source data.
 
@@ -244,6 +264,9 @@ incoming data as plain text, not JSON.
 pipeline actively fetch data periodically from a remote source using
 HTTP requests. If given as a string, it indicates the URI of the
 remote event source.
+
+The `poll` input form reacts to backpressure signals by skipping
+polls.
 
 **`input.poll.target`** required **string**, the target URI to use for
 the event-fetching request.
@@ -276,6 +299,12 @@ receiving data are one of
 [`blpop`](https://redis.io/commands/blpop/) or
 [`brpop`](https://redis.io/commands/brpop/) for each of the
 corresponding redis commands.
+
+The `redis` input form can react to backpressure signals when
+configured with the `blpop` or `brpop` options. The `subscribe` and
+`psubscribe` options don't support pausing. When reacting to
+backpressure, the input channel will skip the execution of `blpop` or
+`brpop` commands.
 
 **`input.redis.instance`** optional **string** or **object**,
 parameters required to connect to a single redis instance. If using a
@@ -812,6 +841,39 @@ an empty string to disable exposition). Metrics are exposed in the
 [open metrics
 format](https://github.com/OpenObservability/OpenMetrics), so they
 should be able to be scraped by a Prometheus instance without issue.
+
+### Backpressure
+
+Backpressure (for CDP) is a signal emitted internally when a specific
+resource consumption metric reaches a threshold. The signal is
+interpreted as a warning that the pipeline will fail by means of
+resource exhaustion if it continues to receive input. Some input forms
+capture the backpressure signal to pause the ingestion of events, and
+resume ingestion once the signal is turned off.
+
+The backpressure signal is disabled by default. To enable it, at least
+one of four environment variables need to be set:
+
+- `BACKPRESSURE_RSS`, which should hold a number representing the
+  upper threshold of the [rss
+  metric](https://nodejs.org/api/process.html#processmemoryusagerss),
+  in bytes.
+- `BACKPRESSURE_HEAP_TOTAL`, which should hold a number representing
+  the upper threshold of the [heapTotal
+  metric](https://nodejs.org/api/process.html#processmemoryusage) in
+  bytes.
+- `BACKPRESSURE_HEAP_USED`, which should hold a number representing
+  the upper threshold of the heapUsed metric, in bytes.
+- `BACKPRESSURE_QUEUED_EVENTS`, which should hold a number
+  representing the upper threshold of the total count of queued
+  events, everywhere in the pipeline.
+
+If more than one threshold is configured, the signal will be triggered
+as soon as one metric surpasses its corresponding
+threshold. Measurements are taken periodically according to the
+`BACKPRESSURE_INTERVAL` environment variable, which holds the time in
+seconds between two measurements. By default, the interval is set to 5
+seconds.
 
 ### Additional configuration
 

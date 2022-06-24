@@ -12,6 +12,7 @@ import {
 } from "../event";
 import { axiosInstance } from "../io/axios";
 import { makeLogger } from "../log";
+import { backpressure } from "../metrics";
 
 /**
  * A logger instance namespaced to this module.
@@ -98,6 +99,9 @@ export const make = (
   let latestETag: string | null = null;
   // One poll is a GET request to the target.
   const fetchOne = async () => {
+    if (backpressure.status()) {
+      return;
+    }
     try {
       const response = await axiosInstance.get(target, { headers });
       logger.debug(

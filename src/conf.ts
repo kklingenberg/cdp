@@ -285,3 +285,51 @@ export const HTTP_CLIENT_DEFAULT_CONCURRENCY: number =
     JSON.parse,
     compileThrowing({ type: "integer", minimum: 1 })
   ) ?? 10;
+
+/**
+ * Time interval, in seconds, between measurements taken to apply
+ * backpressure to input forms.
+ */
+export const BACKPRESSURE_INTERVAL: number =
+  fromEnv(
+    "BACKPRESSURE_INTERVAL",
+    JSON.parse,
+    compileThrowing({ type: "number", exclusiveMinimum: 0 })
+  ) ?? 5;
+
+/**
+ * Backpressure limit against the rss metric, measured in bytes.
+ */
+export const BACKPRESSURE_RSS: number | null = fromEnv(
+  "BACKPRESSURE_RSS",
+  JSON.parse,
+  compileThrowing({ type: "integer", minimum: 1 })
+);
+
+/**
+ * Backpressure limit against the heapTotal metric, measured in bytes.
+ */
+export const BACKPRESSURE_HEAP_TOTAL: number | null = fromEnv(
+  "BACKPRESSURE_HEAP_TOTAL",
+  JSON.parse,
+  compileThrowing({ type: "integer", minimum: 1 })
+);
+
+/**
+ * Backpressure limit against the heapUsed metric, measured in bytes.
+ */
+export const BACKPRESSURE_HEAP_USED: number | null = fromEnv(
+  "BACKPRESSURE_HEAP_USED",
+  JSON.parse,
+  compileThrowing({ type: "integer", minimum: 1 })
+);
+
+/**
+ * Backpressure limit against the queued events metric, measured in
+ * count of events.
+ */
+export const BACKPRESSURE_QUEUED_EVENTS: number | null = fromEnv(
+  "BACKPRESSURE_QUEUED_EVENTS",
+  JSON.parse,
+  compileThrowing({ type: "integer", minimum: 1 })
+);
