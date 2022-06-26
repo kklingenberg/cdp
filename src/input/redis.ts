@@ -1,3 +1,4 @@
+import { match, P } from "ts-pattern";
 import { Readable } from "stream";
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import {
@@ -9,6 +10,7 @@ import {
   wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
+  validateWrap,
 } from "../event";
 import {
   connect,
@@ -19,7 +21,7 @@ import {
 } from "../io/redis";
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
-import { resolveAfter } from "../utils";
+import { check, resolveAfter } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -78,6 +80,20 @@ export const optionsSchema = {
     buildSchema("instance", instanceSchema, "brpop"),
     buildSchema("cluster", clusterSchema, "brpop"),
   ],
+};
+
+/**
+ * Validate redis input options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param options The options to validate.
+ */
+export const validate = (options: RedisInputOptions): void => {
+  check(
+    match(options).with({ wrap: P.select() }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
 };
 
 /**

@@ -27,6 +27,17 @@ export const optionsSchema = {
 };
 
 /**
+ * Validate send-redis options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param name The name of the step this function belongs to.
+ * @param options The options to validate.
+ */
+export const validate = (): void => {
+  // Nothing needs to be validated.
+};
+
+/**
  * Function that sends events to STDOUT and forwards them to the
  * pipeline.
  *

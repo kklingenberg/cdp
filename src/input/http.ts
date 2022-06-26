@@ -1,3 +1,4 @@
+import { match, P } from "ts-pattern";
 import { Channel, AsyncQueue } from "../async-queue";
 import { HTTP_SERVER_DEFAULT_PORT, HTTP_SERVER_HEALTH_ENDPOINT } from "../conf";
 import {
@@ -9,11 +10,13 @@ import {
   wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
+  validateWrap,
 } from "../event";
 import { makeHTTPServer } from "../io/http-server";
 import { isHealthy } from "../io/jq";
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
+import { check } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -49,6 +52,27 @@ export const optionsSchema = {
       required: ["endpoint"],
     },
   ],
+};
+
+/**
+ * Validate http input options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param options The options to validate.
+ */
+export const validate = (options: HTTPInputOptions): void => {
+  const matchOptions = match(options);
+  check(
+    matchOptions.with({ port: P.select(P.string) }, (rawPort) =>
+      ((port) => port >= 1 && port <= 65535)(parseInt(rawPort, 10))
+    ),
+    "the input's http port is invalid (must be between 1 and 65535, inclusive)"
+  );
+  check(
+    matchOptions.with({ wrap: P.select() }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
 };
 
 /**

@@ -1,3 +1,4 @@
+import { match, P } from "ts-pattern";
 import { openSync as openFile, closeSync as closeFile } from "fs";
 import { Readable } from "stream";
 import Tail = require("tail-file");
@@ -11,8 +12,10 @@ import {
   wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
+  validateWrap,
 } from "../event";
 import { makeLogger } from "../log";
+import { check } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -43,6 +46,20 @@ export const optionsSchema = {
       required: ["path"],
     },
   ],
+};
+
+/**
+ * Validate tail input options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param options The options to validate.
+ */
+export const validate = (options: TailInputOptions): void => {
+  check(
+    match(options).with({ wrap: P.select() }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
 };
 
 /**

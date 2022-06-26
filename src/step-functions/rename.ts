@@ -1,5 +1,8 @@
+import { match, P } from "ts-pattern";
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event, makeFrom } from "../event";
+import { isValidEventName } from "../pattern";
+import { check } from "../utils";
 
 /**
  * Options for this function.
@@ -34,6 +37,45 @@ export const optionsSchema = {
       required: ["replace"],
     },
   ],
+};
+
+/**
+ * Validate rename options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param name The name of the step this function belongs to.
+ * @param options The options to validate.
+ */
+export const validate = (
+  name: string,
+  options: RenameFunctionOptions
+): void => {
+  const matchOptions = match(options);
+  check(
+    matchOptions.with({ replace: P.select() }, isValidEventName),
+    `step '${name}' uses an invalid rename.replace value: ` +
+      "it must be a proper event name"
+  );
+  check(
+    matchOptions.with(
+      { append: P.select(P.string) },
+      (append) =>
+        (append.startsWith(".") && isValidEventName(append.slice(1))) ||
+        isValidEventName(append)
+    ),
+    `step '${name}' uses an invalid rename.append value: ` +
+      "it must be a proper event name suffix"
+  );
+  check(
+    matchOptions.with(
+      { prepend: P.select(P.string) },
+      (prepend) =>
+        (prepend.endsWith(".") && isValidEventName(prepend.slice(0, -1))) ||
+        isValidEventName(prepend)
+    ),
+    `step '${name}' uses an invalid rename.prepend value: ` +
+      "it must be a proper event name prefix"
+  );
 };
 
 /**

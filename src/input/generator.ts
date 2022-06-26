@@ -1,7 +1,10 @@
+import { match, P } from "ts-pattern";
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event, arrivalTimestamp, makeNewEventParser } from "../event";
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
+import { isValidEventName } from "../pattern";
+import { check } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -38,6 +41,30 @@ export const optionsSchema = {
     { type: "string", minLength: 1 },
     { type: "null" },
   ],
+};
+
+/**
+ * Validate generator input options, after they've been checked by the
+ * ajv schema.
+ *
+ * @param options The options to validate.
+ */
+export const validate = (options: GeneratorInputOptions): void => {
+  const matchOptions = match(options);
+  check(
+    matchOptions
+      .with(P.select(P.string), isValidEventName)
+      .with({ name: P.select(P.string) }, isValidEventName),
+    "the input has an invalid value for generator.name: " +
+      "it must be a proper event name"
+  );
+  check(
+    matchOptions.with(
+      { seconds: P.select(P.string) },
+      (seconds) => parseFloat(seconds) > 0
+    ),
+    "the input has an invalid value for generator.seconds (must be > 0)"
+  );
 };
 
 /**

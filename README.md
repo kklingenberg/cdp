@@ -587,9 +587,20 @@ from each group except for the first one.
 
 #### `keep`
 
-**`steps.<name>.(reduce|flatmap).keep`** **number** or **string**, a
-function that selects the first few events from an event vector, the
-number of events kept being the specified value.
+**`steps.<name>.(reduce|flatmap).keep`** **number** or **string** or
+**object**, a function that selects the first few events from an event
+vector, the number of events kept being the specified value.
+
+**`steps.<name>.(reduce|flatmap).keep.first`** **number** or
+**string**, the value indicating the maximum amount of events to keep
+from the start of the event vector.
+
+**`steps.<name>.(reduce|flatmap).keep.last`** **number** or
+**string**, the value indicating the maximum amount of events to keep
+from the end of the event vector.
+
+Only one of `first` or `last` may be used. Using a value directly is
+equivalent to using `first`.
 
 #### `keep-when`
 

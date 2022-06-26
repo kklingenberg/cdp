@@ -31,6 +31,17 @@ export const optionsSchema = {
 };
 
 /**
+ * Validate deduplcate options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param name The name of the step this function belongs to.
+ * @param options The options to validate.
+ */
+export const validate = (): void => {
+  // Nothing needs to be validated.
+};
+
+/**
  * Remove duplicate events from the given vector. The duplicate events
  * removed are never the first ones encountered for each event
  * identity.

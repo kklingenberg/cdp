@@ -1,3 +1,4 @@
+import { match, P } from "ts-pattern";
 import { Channel, flatMap } from "../async-queue";
 import {
   Event,
@@ -7,7 +8,9 @@ import {
   wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
+  validateWrap,
 } from "../event";
+import { check } from "../utils";
 import { makeChannel } from "../io/jq";
 
 /**
@@ -36,6 +39,24 @@ export const optionsSchema = {
       required: ["jq-expr"],
     },
   ],
+};
+
+/**
+ * Validate send-receive-jq options, after they've been checked by the
+ * ajv schema.
+ *
+ * @param name The name of the step this function belongs to.
+ * @param options The options to validate.
+ */
+export const validate = (
+  name: string,
+  options: SendReceiveJqFunctionOptions
+): void => {
+  check(
+    match(options).with({ wrap: P.select() }, (wrap) =>
+      validateWrap(wrap, `step '${name}' wrap option`)
+    )
+  );
 };
 
 /**

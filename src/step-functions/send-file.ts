@@ -45,6 +45,17 @@ export const optionsSchema = {
 };
 
 /**
+ * Validate send-file options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param name The name of the step this function belongs to.
+ * @param options The options to validate.
+ */
+export const validate = (): void => {
+  // Nothing needs to be validated.
+};
+
+/**
  * Function that appends events to a file and forwards them to the
  * pipeline.
  *
