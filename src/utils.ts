@@ -141,3 +141,34 @@ export const mergeHeaders = <T>(
     }),
     {}
   );
+
+/**
+ * Make a fuse, which is a boolean flag started at `false` in three
+ * flavours: a getter method for the current value, a setter method to
+ * set it to `true`, and a promise that resolves once the setter is
+ * called. A fuse can only be set to `true` once.
+ *
+ * @returns A new fuse.
+ */
+export const makeFuse = () => {
+  let flag = false;
+  let notify: () => void;
+  const promise = (
+    new Promise((resolve) => {
+      notify = resolve;
+    }) as Promise<void>
+  ).then(() => {
+    flag = true;
+  });
+  return {
+    value: () => flag,
+    trigger: () =>
+      (
+        notify ??
+        (() => {
+          // Oops, triggered before it's ready.
+        })
+      )(),
+    promise,
+  };
+};

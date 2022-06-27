@@ -289,6 +289,76 @@ events that wrap the input data.
 **`input.poll.wrap.raw`** optional **boolean**, whether to treat
 incoming data as plain text, not JSON.
 
+#### `amqp`
+
+**`input.amqp`** **object**, the input form that makes the pipeline
+receive data from an AMQP broker using the AMQP 0-9-1 protocol
+(e.g. [RabbitMQ](https://www.rabbitmq.com/)).
+
+**`input.amqp.url`** required **string**, the URL of the broker to
+connect to.
+
+**`input.amqp.exchange`** required **object**, the description of the
+AMQP exchange to assert. For a description of AMQP exchanges, you may
+read the [AMQP 0-9-1 Model
+explanation](https://www.rabbitmq.com/tutorials/amqp-concepts.html) by
+RabbitMQ.
+
+**`input.amqp.exchange.name`** required **string**, the name of the
+AMQP exchange to assert.
+
+**`input.amqp.exchange.type`** required **"direct"**, **"fanout"** or
+**"topic"**, the type of AMQP exchange to assert.
+
+**`input.amqp.exchange.durable`** optional **boolean**, **"true"** or
+**"false"**, whether the exchange should be declared as _durable_ or
+not (default is `true`).
+
+**`input.amqp.exchange.auto-delete`** optional **boolean**, **"true"**
+or **"false"**, whether the exchange should be automatically deleted
+once no more queues are bound to it (default is `false`).
+
+**`input.amqp.routing-key`** optional **string**, the routing key used
+by the binding between channel and queue. The meaning of the routing
+key depends on the type of exchange. Check the AMQP documentation for
+details.
+
+**`input.amqp.queue`** optional **object**, the description of the
+AMQP queue to assert. If omitted, all configuration values (including
+the queue's name) will be assigned by the broker.
+
+**`input.amqp.queue.name`** optional **string**, the name of the queue
+to assert.
+
+**`input.amqp.queue.durable`** optional **boolean**, **"true"**, or
+**"false"**, whether the queue should be declared as _durable_ or not
+(default is `true`).
+
+**`input.amqp.queue.auto-delete`** optional **boolean**, **"true"**,
+or **"false"**, whether the queue should be automatically deleted once
+no more consumers are present (default is `false`).
+
+**`input.amqp.queue.message-ttl`** optional **number** or **string**,
+the maximum amount of time in milliseconds a message can stay in the
+queue unconsumed.
+
+**`input.amqp.queue.expires`** optional **number** or **string**, the
+maximum amount of time in milliseconds the queue can survive without
+consumers active. Similar to `auto-delete`, which applies immediately
+if set to `true`.
+
+**`input.amqp.queue.dead-letter-exchange`** optional **string**, the
+name of an exchange to send messages to once they expire.
+
+**`input.amqp.queue.max-length`** optional **number** or **string**,
+the maximum size of the queue. Old messages pushed out of the queue
+will be sent to the dead-letter exchange, if set.
+
+**`input.amqp.queue.max-priority`** optional **number** or **string**,
+the maximum value for `priority`, if used. Check the
+[documentation](https://www.rabbitmq.com/priority.html) for more
+information.
+
 #### `redis`
 
 **`input.redis`** **object**, the input form that makes the pipeline

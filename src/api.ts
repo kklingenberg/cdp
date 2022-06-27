@@ -25,6 +25,8 @@ import * as httpInputModule from "./input/http";
 import { HTTPInputOptions } from "./input/http";
 import * as pollInputModule from "./input/poll";
 import { PollInputOptions } from "./input/poll";
+import * as amqpInputModule from "./input/amqp";
+import { AMQPInputOptions } from "./input/amqp";
 import * as redisInputModule from "./input/redis";
 import { RedisInputOptions } from "./input/redis";
 // Step functions
@@ -81,6 +83,7 @@ const inputModules = {
   tail: tailInputModule,
   http: httpInputModule,
   poll: pollInputModule,
+  amqp: amqpInputModule,
   redis: redisInputModule,
 };
 
@@ -93,6 +96,7 @@ type InputTemplate =
   | { tail: TailInputOptions }
   | { http: HTTPInputOptions }
   | { poll: PollInputOptions }
+  | { amqp: AMQPInputOptions }
   | { redis: RedisInputOptions };
 const inputTemplateSchema = {
   anyOf: Object.entries(inputModules).map(([key, mod]) =>
