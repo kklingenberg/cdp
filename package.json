@@ -4,10 +4,11 @@
   "description": "Composable Data Pipelines",
   "main": "src/index.ts",
   "scripts": {
+    "start-rabbitmq": "docker start cdp-rabbitmq || docker run --rm -p 5672:5672 --name cdp-rabbitmq -d rabbitmq:3-alpine",
     "start-redis": "docker start cdp-redis || docker run --rm -p 6379:6379 --name cdp-redis -d redis:7-alpine",
-    "pretest": "npm run start-redis",
+    "pretest": "npm run start-redis && npm run start-rabbitmq",
     "test": "jest -i --coverage",
-    "posttest": "docker stop cdp-redis",
+    "posttest": "docker stop cdp-redis cdp-rabbitmq",
     "check": "jest -i -t @standalone && eslint . --ext .ts && tsc",
     "build": "esbuild src/index.ts --bundle --minify --platform=node --target=node16 --outdir=build",
     "check-and-build": "npm run check && npm run build"

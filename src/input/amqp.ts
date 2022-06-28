@@ -188,99 +188,103 @@ export const make = (
   const consuming = (async () => {
     const conn = await connect(options.url);
     conn.on("close", () => done.trigger());
-    const ch = await conn.createChannel();
-    ch.on("close", () => done.trigger());
-
-    const { exchange } = await ch.assertExchange(
-      options.exchange.name,
-      options.exchange.type,
-      {
+    conn.on("error", () => done.trigger());
+    try {
+      const ch = await conn.createChannel();
+      ch.on("close", () => done.trigger());
+      ch.on("error", () => done.trigger());
+      const { exchange } = await ch.assertExchange(
+        options.exchange.name,
+        options.exchange.type,
+        {
+          durable:
+            typeof options.exchange.durable === "string"
+              ? options.exchange.durable === "true"
+              : options.exchange.durable ?? true,
+          autoDelete:
+            typeof options.exchange["auto-delete"] === "string"
+              ? options.exchange["auto-delete"] === "true"
+              : options.exchange["auto-delete"] ?? false,
+        }
+      );
+      const { queue } = await ch.assertQueue(options.queue?.name ?? "", {
         durable:
-          typeof options.exchange.durable === "string"
-            ? options.exchange.durable === "true"
-            : options.exchange.durable ?? true,
+          typeof options.queue?.durable === "string"
+            ? options.queue?.durable === "true"
+            : options.queue?.durable ?? true,
         autoDelete:
-          typeof options.exchange["auto-delete"] === "string"
-            ? options.exchange["auto-delete"] === "true"
-            : options.exchange["auto-delete"] ?? false,
-      }
-    );
-    const { queue } = await ch.assertQueue(options.queue?.name ?? "", {
-      durable:
-        typeof options.queue?.durable === "string"
-          ? options.queue?.durable === "true"
-          : options.queue?.durable ?? true,
-      autoDelete:
-        typeof options.queue?.["auto-delete"] === "string"
-          ? options.queue?.["auto-delete"] === "true"
-          : options.queue?.["auto-delete"] ?? false,
-      ...(typeof options.queue?.["message-ttl"] !== "undefined"
-        ? {
-            messageTtl:
-              typeof options.queue?.["message-ttl"] === "string"
-                ? parseInt(options.queue?.["message-ttl"], 10)
-                : options.queue?.["message-ttl"],
-          }
-        : {}),
-      ...(typeof options.queue?.expires !== "undefined"
-        ? {
-            expires:
-              typeof options.queue?.expires === "string"
-                ? parseInt(options.queue?.expires, 10)
-                : options.queue?.expires,
-          }
-        : {}),
-      ...(typeof options.queue?.["dead-letter-exchange"] !== "undefined"
-        ? { deadLetterExchange: options.queue?.["dead-letter-exchange"] }
-        : {}),
-      ...(typeof options.queue?.["max-length"] !== "undefined"
-        ? {
-            maxLength:
-              typeof options.queue?.["max-length"] === "string"
-                ? parseInt(options.queue?.["max-length"], 10)
-                : options.queue?.["max-length"],
-          }
-        : {}),
-      ...(typeof options.queue?.["max-priority"] !== "undefined"
-        ? {
-            maxPriority:
-              typeof options.queue?.["max-priority"] === "string"
-                ? parseInt(options.queue?.["max-priority"], 10)
-                : options.queue?.["max-priority"],
-          }
-        : {}),
-    });
-    await ch.bindQueue(
-      queue,
-      exchange,
-      options["binding-pattern"] ??
-        { direct: queue, fanout: "", topic: "#" }[options.exchange.type]
-    );
+          typeof options.queue?.["auto-delete"] === "string"
+            ? options.queue?.["auto-delete"] === "true"
+            : options.queue?.["auto-delete"] ?? false,
+        ...(typeof options.queue?.["message-ttl"] !== "undefined"
+          ? {
+              messageTtl:
+                typeof options.queue?.["message-ttl"] === "string"
+                  ? parseInt(options.queue?.["message-ttl"], 10)
+                  : options.queue?.["message-ttl"],
+            }
+          : {}),
+        ...(typeof options.queue?.expires !== "undefined"
+          ? {
+              expires:
+                typeof options.queue?.expires === "string"
+                  ? parseInt(options.queue?.expires, 10)
+                  : options.queue?.expires,
+            }
+          : {}),
+        ...(typeof options.queue?.["dead-letter-exchange"] !== "undefined"
+          ? { deadLetterExchange: options.queue?.["dead-letter-exchange"] }
+          : {}),
+        ...(typeof options.queue?.["max-length"] !== "undefined"
+          ? {
+              maxLength:
+                typeof options.queue?.["max-length"] === "string"
+                  ? parseInt(options.queue?.["max-length"], 10)
+                  : options.queue?.["max-length"],
+            }
+          : {}),
+        ...(typeof options.queue?.["max-priority"] !== "undefined"
+          ? {
+              maxPriority:
+                typeof options.queue?.["max-priority"] === "string"
+                  ? parseInt(options.queue?.["max-priority"], 10)
+                  : options.queue?.["max-priority"],
+            }
+          : {}),
+      });
+      await ch.bindQueue(
+        queue,
+        exchange,
+        options["binding-pattern"] ??
+          { direct: queue, fanout: "", topic: "#" }[options.exchange.type]
+      );
 
-    let scheduleRecovery = false;
-    const { consumerTag } = await ch.consume(queue, (message) => {
-      if (message === null) {
-        return;
+      let scheduleRecovery = false;
+      const { consumerTag } = await ch.consume(queue, (message) => {
+        if (message === null) {
+          return;
+        }
+        if (!backpressure.status()) {
+          logger.debug("Got message from amqp broker", message);
+          channel.send(message.content.toString());
+          ch.ack(message);
+        } else {
+          scheduleRecovery = true;
+        }
+      });
+      while (!done.value()) {
+        if (scheduleRecovery) {
+          await ch.recover();
+          scheduleRecovery = false;
+        }
+        await resolveAfter(MESSAGE_RECOVERY_INTERVAL);
       }
-      if (!backpressure.status()) {
-        logger.debug("Got message from amqp broker", message);
-        channel.send(message.content.toString());
-        ch.ack(message);
-      } else {
-        scheduleRecovery = true;
-      }
-    });
-    while (!done.value()) {
-      if (scheduleRecovery) {
-        await ch.recover();
-        scheduleRecovery = false;
-      }
-      await resolveAfter(MESSAGE_RECOVERY_INTERVAL);
+      await ch.cancel(consumerTag);
+
+      await ch.close();
+    } finally {
+      await conn.close();
     }
-    await ch.cancel(consumerTag);
-
-    await ch.close();
-    await conn.close();
   })().catch((err) => {
     logger.error(`Error during AMQP consumption: ${err}`);
     done.trigger();
