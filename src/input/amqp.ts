@@ -256,7 +256,7 @@ export const make = (
         queue,
         exchange,
         options["binding-pattern"] ??
-          { direct: queue, fanout: "", topic: "#" }[options.exchange.type]
+          { direct: "cdp", fanout: "", topic: "#" }[options.exchange.type]
       );
 
       let scheduleRecovery = false;
@@ -272,13 +272,18 @@ export const make = (
           scheduleRecovery = true;
         }
       });
-      while (!done.value()) {
-        if (scheduleRecovery) {
-          await ch.recover();
-          scheduleRecovery = false;
-        }
-        await resolveAfter(MESSAGE_RECOVERY_INTERVAL);
-      }
+      await Promise.race([
+        done.promise,
+        (async () => {
+          while (!done.value()) {
+            if (scheduleRecovery) {
+              await ch.recover();
+              scheduleRecovery = false;
+            }
+            await resolveAfter(MESSAGE_RECOVERY_INTERVAL);
+          }
+        })(),
+      ]);
       await ch.cancel(consumerTag);
 
       await ch.close();
