@@ -1,20 +1,29 @@
+import { PassThrough, Readable } from "stream";
+// Mock the stdio wrapper module.
+const stdoutMock = {
+  current: null,
+} as {
+  current: Readable | null;
+};
+const mockSTDOUTGetter = jest.fn(() => {
+  const mock = new PassThrough();
+  mock.setEncoding("utf-8");
+  stdoutMock.current = mock;
+  return mock;
+});
+jest.mock("../../src/io/stdio", () => {
+  const originalModule = jest.requireActual("../../src/io/stdio");
+  return {
+    ...originalModule,
+    getSTDOUT: mockSTDOUTGetter,
+  };
+});
+afterEach(() => mockSTDOUTGetter.mockClear());
+
 import { make as makeEvent } from "../../src/event";
 import { resolveAfter } from "../../src/utils";
 import { make } from "../../src/step-functions/send-stdout";
 import { consume } from "../test-utils";
-
-// Mock for console.log.
-let mockedConsoleLog: jest.SpyInstance<void>;
-
-beforeEach(() => {
-  mockedConsoleLog = jest.spyOn(console, "log").mockImplementation(() => {
-    // Prevent log messages during these tests.
-  });
-});
-
-afterEach(() => {
-  mockedConsoleLog.mockRestore();
-});
 
 test("@standalone Send-stdout works as expected", async () => {
   // Arrange
@@ -32,10 +41,9 @@ test("@standalone Send-stdout works as expected", async () => {
   ]);
   // Assert
   expect(output.map((e) => e.data)).toEqual(["hello", "world"]);
-  expect(mockedConsoleLog.mock.calls).toEqual([
-    [JSON.stringify(events[0])],
-    [JSON.stringify(events[1])],
-  ]);
+  expect(stdoutMock.current?.read()).toEqual(
+    `${JSON.stringify(events[0])}\n${JSON.stringify(events[1])}\n`
+  );
 });
 
 test("@standalone Send-stdout works when using a jq program to preprocess the data", async () => {
@@ -57,5 +65,5 @@ test("@standalone Send-stdout works when using a jq program to preprocess the da
   // Assert
   expect(output.map((e) => e.data)).toEqual(["hello", ["world"]]);
   // The 'hello' sent to STDOUT is not JSON-encoded. This is expected.
-  expect(mockedConsoleLog.mock.calls).toEqual([["hello"], ['["world"]']]);
+  expect(stdoutMock.current?.read()).toEqual('hello\n["world"]\n');
 });

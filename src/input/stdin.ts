@@ -11,7 +11,7 @@ import {
   makeWrapper,
   validateWrap,
 } from "../event";
-import { getSTDIN } from "../io/stdin";
+import { getSTDIN } from "../io/stdio";
 import { makeLogger } from "../log";
 import { check } from "../utils";
 

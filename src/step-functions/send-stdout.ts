@@ -1,6 +1,7 @@
 import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeChannel } from "../io/jq";
+import { getSTDOUT } from "../io/stdio";
 
 /**
  * Options for this function.
@@ -55,22 +56,37 @@ export const make = async (
   /* eslint-enable @typescript-eslint/no-unused-vars */
   options: SendSTDOUTFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
-  let forwarder: (events: Event[]) => void = (events: Event[]) =>
-    events.forEach((event) => console.log(JSON.stringify(event)));
-  let closeExternal: () => Promise<void> = async () => {
-    // Empty function
-  };
+  const stdout = getSTDOUT();
+  let forwarder: (events: Event[]) => void;
+  let closeExternal: () => Promise<void>;
   if (options !== null && typeof options["jq-expr"] === "string") {
     const jqChannel: Channel<Event[], never> = drain(
       await makeChannel(options["jq-expr"]),
       async (result: unknown) => {
-        console.log(
-          typeof result === "string" ? result : JSON.stringify(result)
+        const flushed = stdout.write(
+          (typeof result === "string" ? result : JSON.stringify(result)) + "\n"
         );
+        if (!flushed) {
+          await new Promise((resolve) => stdout.once("drain", resolve));
+        }
       }
     );
     forwarder = jqChannel.send.bind(jqChannel);
     closeExternal = jqChannel.close.bind(jqChannel);
+  } else {
+    const passThroughChannel: Channel<Event[], never> = drain(
+      new AsyncQueue<Event[]>("step.<?>.send-stdout.pass-through").asChannel(),
+      async (events: Event[]) => {
+        for (const event of events) {
+          const flushed = stdout.write(JSON.stringify(event) + "\n");
+          if (!flushed) {
+            await new Promise((resolve) => stdout.once("drain", resolve));
+          }
+        }
+      }
+    );
+    forwarder = passThroughChannel.send.bind(passThroughChannel);
+    closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
   const queue = new AsyncQueue<Event[]>("step.<?>.send-stdout.forward");
   const forwardingChannel = flatMap(async (events: Event[]) => {
