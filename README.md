@@ -318,10 +318,12 @@ not (default is `true`).
 or **"false"**, whether the exchange should be automatically deleted
 once no more queues are bound to it (default is `false`).
 
-**`input.amqp.routing-key`** optional **string**, the routing key used
-by the binding between channel and queue. The meaning of the routing
-key depends on the type of exchange. Check the AMQP documentation for
-details.
+**`input.amqp.binding-pattern`** optional **string**, the pattern used
+by the binding between channel and queue. The meaning of the pattern
+depends on the type of exchange. Check the AMQP documentation for
+details. If omitted, it will default to `"cdp"` for `direct`
+exchanges, the empty string for `fanout` exchanges, and `"#"` (the
+match-all pattern) for `topic` exchanges.
 
 **`input.amqp.queue`** optional **object**, the description of the
 AMQP queue to assert. If omitted, all configuration values (including

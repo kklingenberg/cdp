@@ -33,7 +33,7 @@ export interface AMQPInputOptions {
     durable?: boolean | "true" | "false";
     "auto-delete"?: boolean | "true" | "false";
   };
-  "routing-key"?: string;
+  "binding-pattern"?: string;
   queue?: {
     name?: string;
     durable?: boolean | "true" | "false";
@@ -67,7 +67,7 @@ export const optionsSchema = {
       additionalProperties: false,
       required: ["name", "type"],
     },
-    "routing-key": { type: "string" },
+    "binding-pattern": { type: "string" },
     queue: {
       type: "object",
       properties: {
@@ -250,7 +250,12 @@ export const make = (
           }
         : {}),
     });
-    await ch.bindQueue(queue, exchange, options["routing-key"] ?? queue);
+    await ch.bindQueue(
+      queue,
+      exchange,
+      options["binding-pattern"] ??
+        { direct: queue, fanout: "", topic: "#" }[options.exchange.type]
+    );
 
     let scheduleRecovery = false;
     const { consumerTag } = await ch.consume(queue, (message) => {
