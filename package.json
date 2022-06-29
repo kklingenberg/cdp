@@ -49,6 +49,7 @@
     "commander": "^9.3.0",
     "ioredis": "^5.0.6",
     "koa": "^2.13.4",
+    "mqtt": "^4.3.7",
     "prom-client": "^14.0.1",
     "tail-file": "^1.4.15",
     "ts-pattern": "^4.0.3",
