@@ -1,10 +1,10 @@
 import { Readable } from "stream";
-// Mock the stdin wrapper module.
+// Mock the stdio wrapper module.
 const mockSTDINGetter = jest.fn(() =>
   Readable.from(["Lorem ipsum\n", "Dolor sit amet\n"])
 );
-jest.mock("../../src/io/stdin", () => {
-  const originalModule = jest.requireActual("../../src/io/stdin");
+jest.mock("../../src/io/stdio", () => {
+  const originalModule = jest.requireActual("../../src/io/stdio");
   return {
     ...originalModule,
     getSTDIN: mockSTDINGetter,

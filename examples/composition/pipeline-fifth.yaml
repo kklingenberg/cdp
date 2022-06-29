@@ -17,3 +17,14 @@ steps:
             (.[].t | map(.p) | join(" --> ")),
             ")"
           ] | join("")
+
+  forward:
+    after:
+      - debug
+    flatmap:
+      send-amqp:
+        url: amqp://rabbitmq:5672
+        exchange:
+          name: cdp-composition
+          type: topic
+        routing-key: from.fifth.to.sixth

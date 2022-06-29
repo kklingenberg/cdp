@@ -1,3 +1,4 @@
+import { match, P } from "ts-pattern";
 import { Channel } from "../async-queue";
 import {
   Event,
@@ -8,9 +9,11 @@ import {
   wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
+  validateWrap,
 } from "../event";
-import { getSTDIN } from "../io/stdin";
+import { getSTDIN } from "../io/stdio";
 import { makeLogger } from "../log";
+import { check } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -35,6 +38,20 @@ export const optionsSchema = {
     },
     { type: "null" },
   ],
+};
+
+/**
+ * Validate stdin input options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param options The options to validate.
+ */
+export const validate = (options: STDINInputOptions): void => {
+  check(
+    match(options).with({ wrap: P.select() }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
 };
 
 /**

@@ -1,3 +1,4 @@
+import { match, P } from "ts-pattern";
 import { Channel, AsyncQueue } from "../async-queue";
 import { POLL_INPUT_DEFAULT_INTERVAL } from "../conf";
 import {
@@ -9,10 +10,12 @@ import {
   wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
+  validateWrap,
 } from "../event";
 import { axiosInstance } from "../io/axios";
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
+import { check } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -64,6 +67,28 @@ export const optionsSchema = {
       required: ["target"],
     },
   ],
+};
+
+/**
+ * Validate poll input options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param options The options to validate.
+ */
+export const validate = (options: PollInputOptions): void => {
+  const matchOptions = match(options);
+  check(
+    matchOptions.with(
+      { seconds: P.select(P.string) },
+      (seconds) => parseFloat(seconds) > 0
+    ),
+    "the input has an invalid value for poll.seconds (must be > 0)"
+  );
+  check(
+    matchOptions.with({ wrap: P.select() }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
 };
 
 /**

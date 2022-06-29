@@ -4,10 +4,11 @@
   "description": "Composable Data Pipelines",
   "main": "src/index.ts",
   "scripts": {
+    "start-rabbitmq": "docker start cdp-rabbitmq || docker run --rm -p 5672:5672 --name cdp-rabbitmq -d rabbitmq:3-alpine",
     "start-redis": "docker start cdp-redis || docker run --rm -p 6379:6379 --name cdp-redis -d redis:7-alpine",
-    "pretest": "npm run start-redis",
+    "pretest": "npm run start-redis && npm run start-rabbitmq",
     "test": "jest -i --coverage",
-    "posttest": "docker stop cdp-redis",
+    "posttest": "docker stop cdp-redis cdp-rabbitmq",
     "check": "jest -i -t @standalone && eslint . --ext .ts && tsc",
     "build": "esbuild src/index.ts --bundle --minify --platform=node --target=node16 --outdir=build",
     "check-and-build": "npm run check && npm run build"
@@ -29,6 +30,7 @@
   },
   "homepage": "https://github.com/kklingenberg/cdp#readme",
   "devDependencies": {
+    "@types/amqplib": "^0.8.2",
     "@types/jest": "^27.5.2",
     "@types/koa": "^2.13.4",
     "@typescript-eslint/eslint-plugin": "^5.29.0",
@@ -42,6 +44,7 @@
   "dependencies": {
     "agentkeepalive": "^4.2.1",
     "ajv": "^8.11.0",
+    "amqplib": "^0.10.0",
     "axios": "^0.26.1",
     "commander": "^9.3.0",
     "ioredis": "^5.0.6",

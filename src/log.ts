@@ -29,7 +29,10 @@ const nullLogger: Logger = {
  */
 export const makeLogger = (ns: string): Logger => {
   const levels = ["debug", "info", "warn", "error"];
-  const currentLevelIndex = Math.max(levels.indexOf(LOG_LEVEL), 0);
+  if (!levels.includes(LOG_LEVEL)) {
+    return nullLogger;
+  }
+  const currentLevelIndex = levels.indexOf(LOG_LEVEL);
   const prefix = new Map([
     ["debug", `DEBUG at ${ns}:`],
     ["info", `INFO  at ${ns}:`],

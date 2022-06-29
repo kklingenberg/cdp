@@ -1,7 +1,7 @@
 import { match, P } from "ts-pattern";
 import { flatMap, compose } from "./async-queue";
 import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
-import { Event, validateWrap } from "./event";
+import { Event } from "./event";
 import { isHealthy } from "./io/jq";
 import { makeLogger } from "./log";
 import {
@@ -10,102 +10,50 @@ import {
   deadEvents,
   startExposingMetrics,
 } from "./metrics";
-import {
-  isValidEventName,
-  Pattern,
-  patternSchema,
-  isValidPattern,
-} from "./pattern";
+import { Pattern, patternSchema, isValidPattern } from "./pattern";
 import { StepDefinition, Pipeline, validate, run } from "./pipeline";
 import { makeWindowed } from "./step";
-import { ajv, compileThrowing, getSignature, resolveAfter } from "./utils";
+import { compileThrowing, check, getSignature, resolveAfter } from "./utils";
 // Input forms
-import {
-  GeneratorInputOptions,
-  optionsSchema as generatorInputOptionsSchema,
-  make as makeGeneratorInput,
-} from "./input/generator";
-import {
-  STDINInputOptions,
-  optionsSchema as stdinInputOptionsSchema,
-  make as makeSTDINInput,
-} from "./input/stdin";
-import {
-  TailInputOptions,
-  optionsSchema as tailInputOptionsSchema,
-  make as makeTailInput,
-} from "./input/tail";
-import {
-  HTTPInputOptions,
-  optionsSchema as httpInputOptionsSchema,
-  make as makeHTTPInput,
-} from "./input/http";
-import {
-  PollInputOptions,
-  optionsSchema as pollInputOptionsSchema,
-  make as makePollInput,
-} from "./input/poll";
-import {
-  RedisInputOptions,
-  optionsSchema as redisInputOptionsSchema,
-  make as makeRedisInput,
-} from "./input/redis";
+import * as generatorInputModule from "./input/generator";
+import { GeneratorInputOptions } from "./input/generator";
+import * as stdinInputModule from "./input/stdin";
+import { STDINInputOptions } from "./input/stdin";
+import * as tailInputModule from "./input/tail";
+import { TailInputOptions } from "./input/tail";
+import * as httpInputModule from "./input/http";
+import { HTTPInputOptions } from "./input/http";
+import * as pollInputModule from "./input/poll";
+import { PollInputOptions } from "./input/poll";
+import * as amqpInputModule from "./input/amqp";
+import { AMQPInputOptions } from "./input/amqp";
+import * as redisInputModule from "./input/redis";
+import { RedisInputOptions } from "./input/redis";
 // Step functions
-import {
-  DeduplicateFunctionOptions,
-  optionsSchema as deduplicateFunctionOptionsSchema,
-  make as makeDeduplicateFunction,
-} from "./step-functions/deduplicate";
-import {
-  KeepFunctionOptions,
-  optionsSchema as keepFunctionOptionsSchema,
-  make as makeKeepFunction,
-} from "./step-functions/keep";
-import {
-  KeepWhenFunctionOptions,
-  optionsSchema as keepWhenFunctionOptionsSchema,
-  make as makeKeepWhenFunction,
-} from "./step-functions/keep-when";
-import {
-  RenameFunctionOptions,
-  optionsSchema as renameFunctionOptionsSchema,
-  make as makeRenameFunction,
-} from "./step-functions/rename";
-import {
-  ExposeHTTPFunctionOptions,
-  optionsSchema as exposeHTTPFunctionOptionsSchema,
-  make as makeExposeHTTPFunction,
-} from "./step-functions/expose-http";
-import {
-  SendRedisFunctionOptions,
-  optionsSchema as sendRedisFunctionOptionsSchema,
-  make as makeSendRedisFunction,
-} from "./step-functions/send-redis";
-import {
-  SendHTTPFunctionOptions,
-  optionsSchema as sendHTTPFunctionOptionsSchema,
-  make as makeSendHTTPFunction,
-} from "./step-functions/send-http";
-import {
-  SendReceiveHTTPFunctionOptions,
-  optionsSchema as sendReceiveHTTPFunctionOptionsSchema,
-  make as makeSendReceiveHTTPFunction,
-} from "./step-functions/send-receive-http";
-import {
-  SendReceiveJqFunctionOptions,
-  optionsSchema as sendReceiveJqFunctionOptionsSchema,
-  make as makeSendReceiveJqFunction,
-} from "./step-functions/send-receive-jq";
-import {
-  SendFileFunctionOptions,
-  optionsSchema as sendFileFunctionOptionsSchema,
-  make as makeSendFileFunction,
-} from "./step-functions/send-file";
-import {
-  SendSTDOUTFunctionOptions,
-  optionsSchema as sendSTDOUTFunctionOptionsSchema,
-  make as makeSendSTDOUTFunction,
-} from "./step-functions/send-stdout";
+import * as deduplicateFunctionModule from "./step-functions/deduplicate";
+import { DeduplicateFunctionOptions } from "./step-functions/deduplicate";
+import * as keepFunctionModule from "./step-functions/keep";
+import { KeepFunctionOptions } from "./step-functions/keep";
+import * as keepWhenFunctionModule from "./step-functions/keep-when";
+import { KeepWhenFunctionOptions } from "./step-functions/keep-when";
+import * as renameFunctionModule from "./step-functions/rename";
+import { RenameFunctionOptions } from "./step-functions/rename";
+import * as exposeHTTPFunctionModule from "./step-functions/expose-http";
+import { ExposeHTTPFunctionOptions } from "./step-functions/expose-http";
+import * as sendAMQPFunctionModule from "./step-functions/send-amqp";
+import { SendAMQPFunctionOptions } from "./step-functions/send-amqp";
+import * as sendRedisFunctionModule from "./step-functions/send-redis";
+import { SendRedisFunctionOptions } from "./step-functions/send-redis";
+import * as sendHTTPFunctionModule from "./step-functions/send-http";
+import { SendHTTPFunctionOptions } from "./step-functions/send-http";
+import * as sendReceiveHTTPFunctionModule from "./step-functions/send-receive-http";
+import { SendReceiveHTTPFunctionOptions } from "./step-functions/send-receive-http";
+import * as sendReceiveJqFunctionModule from "./step-functions/send-receive-jq";
+import { SendReceiveJqFunctionOptions } from "./step-functions/send-receive-jq";
+import * as sendFileFunctionModule from "./step-functions/send-file";
+import { SendFileFunctionOptions } from "./step-functions/send-file";
+import * as sendSTDOUTFunctionModule from "./step-functions/send-stdout";
+import { SendSTDOUTFunctionOptions } from "./step-functions/send-stdout";
 
 /**
  * A logger instance namespaced to this module.
@@ -128,6 +76,20 @@ const makeWrapperSchema = (key: string, schema: object) => ({
 });
 
 /**
+ * Input modules available. Each provides an `optionsSchema` object,
+ * and `validate` and `make` functions.
+ */
+const inputModules = {
+  generator: generatorInputModule,
+  stdin: stdinInputModule,
+  tail: tailInputModule,
+  http: httpInputModule,
+  poll: pollInputModule,
+  amqp: amqpInputModule,
+  redis: redisInputModule,
+};
+
+/**
  * An input template is one of the provided ones.
  **/
 type InputTemplate =
@@ -136,16 +98,31 @@ type InputTemplate =
   | { tail: TailInputOptions }
   | { http: HTTPInputOptions }
   | { poll: PollInputOptions }
+  | { amqp: AMQPInputOptions }
   | { redis: RedisInputOptions };
 const inputTemplateSchema = {
-  anyOf: [
-    makeWrapperSchema("generator", generatorInputOptionsSchema),
-    makeWrapperSchema("stdin", stdinInputOptionsSchema),
-    makeWrapperSchema("tail", tailInputOptionsSchema),
-    makeWrapperSchema("http", httpInputOptionsSchema),
-    makeWrapperSchema("poll", pollInputOptionsSchema),
-    makeWrapperSchema("redis", redisInputOptionsSchema),
-  ],
+  anyOf: Object.entries(inputModules).map(([key, mod]) =>
+    makeWrapperSchema(key, mod.optionsSchema)
+  ),
+};
+
+/**
+ * Step function modules available. Each provides an `optionsSchema`
+ * object, a `validate` function, and a `make` asynchronous function.
+ */
+const stepFunctionModules = {
+  rename: renameFunctionModule,
+  deduplicate: deduplicateFunctionModule,
+  keep: keepFunctionModule,
+  "keep-when": keepWhenFunctionModule,
+  "send-stdout": sendSTDOUTFunctionModule,
+  "send-file": sendFileFunctionModule,
+  "send-http": sendHTTPFunctionModule,
+  "send-amqp": sendAMQPFunctionModule,
+  "send-redis": sendRedisFunctionModule,
+  "expose-http": exposeHTTPFunctionModule,
+  "send-receive-jq": sendReceiveJqFunctionModule,
+  "send-receive-http": sendReceiveHTTPFunctionModule,
 };
 
 /**
@@ -159,27 +136,15 @@ type StepFunctionTemplate =
   | { "send-stdout": SendSTDOUTFunctionOptions }
   | { "send-file": SendFileFunctionOptions }
   | { "send-http": SendHTTPFunctionOptions }
+  | { "send-amqp": SendAMQPFunctionOptions }
   | { "send-redis": SendRedisFunctionOptions }
   | { "expose-http": ExposeHTTPFunctionOptions }
   | { "send-receive-jq": SendReceiveJqFunctionOptions }
   | { "send-receive-http": SendReceiveHTTPFunctionOptions };
 const stepFunctionTemplateSchema = {
-  anyOf: [
-    makeWrapperSchema("rename", renameFunctionOptionsSchema),
-    makeWrapperSchema("deduplicate", deduplicateFunctionOptionsSchema),
-    makeWrapperSchema("keep", keepFunctionOptionsSchema),
-    makeWrapperSchema("keep-when", keepWhenFunctionOptionsSchema),
-    makeWrapperSchema("send-stdout", sendSTDOUTFunctionOptionsSchema),
-    makeWrapperSchema("send-file", sendFileFunctionOptionsSchema),
-    makeWrapperSchema("send-http", sendHTTPFunctionOptionsSchema),
-    makeWrapperSchema("send-redis", sendRedisFunctionOptionsSchema),
-    makeWrapperSchema("expose-http", exposeHTTPFunctionOptionsSchema),
-    makeWrapperSchema("send-receive-jq", sendReceiveJqFunctionOptionsSchema),
-    makeWrapperSchema(
-      "send-receive-http",
-      sendReceiveHTTPFunctionOptionsSchema
-    ),
-  ],
+  anyOf: Object.entries(stepFunctionModules).map(([key, mod]) =>
+    makeWrapperSchema(key, mod.optionsSchema)
+  ),
 };
 
 /**
@@ -253,16 +218,6 @@ const pipelineTemplateSchema = {
 const validatePipelineTemplate = compileThrowing(pipelineTemplateSchema);
 
 /**
- * Extract the type of ts-pattern's match objects for boolean returns.
- */
-class BooleanMatchTypeExtractor<T> {
-  wrappedMatch(v: T) {
-    return match<T, boolean>(v);
-  }
-}
-type BooleanMatch<T> = ReturnType<BooleanMatchTypeExtractor<T>["wrappedMatch"]>;
-
-/**
  * Parses and creates a pipeline template from a raw structure. Throws
  * an error with an explanation message in case the given structure
  * can't be translated into a pipeline template.
@@ -275,72 +230,10 @@ export const makePipelineTemplate = (rawThing: unknown): PipelineTemplate => {
   const thing = validatePipelineTemplate(rawThing) as PipelineTemplate;
   // Explicitly check what the schema couldn't declare as a
   // restriction.
-  const check = <T>(m: BooleanMatch<T>, message?: string): void => {
-    if (!m.otherwise(() => true)) {
-      throw new Error(message ?? "validation error");
-    }
-  };
-  // 1. Check the input forms.
-  const matchInput = match(thing.input);
-  check(
-    matchInput.with({ generator: P.select(P.string) }, isValidEventName),
-    "the input has an invalid value for generator.name: " +
-      "it must be a proper event name"
-  );
-  check(
-    matchInput.with(
-      { generator: { name: P.select(P.string) } },
-      isValidEventName
-    ),
-    "the input has an invalid value for generator.name: " +
-      "it must be a proper event name"
-  );
-  check(
-    matchInput.with(
-      { generator: { seconds: P.select(P.string) } },
-      (seconds) => parseFloat(seconds) > 0
-    ),
-    "the input has an invalid value for generator.seconds (must be > 0)"
-  );
-  check(
-    matchInput.with({ stdin: { wrap: P.select() } }, (wrap) =>
-      validateWrap(wrap, "the input's wrap option")
-    )
-  );
-  check(
-    matchInput.with({ tail: { wrap: P.select() } }, (wrap) =>
-      validateWrap(wrap, "the input's wrap option")
-    )
-  );
-  check(
-    matchInput.with({ http: { port: P.select(P.string) } }, (rawPort) =>
-      ((port) => port >= 1 && port <= 65535)(parseInt(rawPort, 10))
-    ),
-    "the input's http port is invalid (must be between 1 and 65535, inclusive)"
-  );
-  check(
-    matchInput.with({ http: { wrap: P.select() } }, (wrap) =>
-      validateWrap(wrap, "the input's wrap option")
-    )
-  );
-  check(
-    matchInput.with(
-      { poll: { seconds: P.select(P.string) } },
-      (seconds) => parseFloat(seconds) > 0
-    ),
-    "the input has an invalid value for poll.seconds (must be > 0)"
-  );
-  check(
-    matchInput.with({ poll: { wrap: P.select() } }, (wrap) =>
-      validateWrap(wrap, "the input's wrap option")
-    )
-  );
-  check(
-    matchInput.with({ redis: { wrap: P.select() } }, (wrap) =>
-      validateWrap(wrap, "the input's wrap option")
-    )
-  );
-  // 2. Check each step.
+  // Check the input form.
+  const [inputName, inputOptions] = Object.entries(thing.input)[0];
+  inputModules[inputName as keyof typeof inputModules].validate(inputOptions);
+  // Check each step.
   Object.entries(thing.steps ?? {}).forEach(([name, definition]) => {
     const matchStep = match(definition);
     check(
@@ -373,59 +266,13 @@ export const makePipelineTemplate = (rawThing: unknown): PipelineTemplate => {
         .with({}, () => false),
       `step '${name}' must use one of flatmap or reduce`
     );
-    // 2.1 Check specific functions.
-    const matchFn = match(
-      (definition.flatmap ?? definition.reduce) as StepFunctionTemplate
-    );
-    check(
-      matchFn.with(
-        { "keep-when": P.select() },
-        (schema) => !!ajv.validateSchema(schema)
-      ),
-      `step '${name}' uses an invalid schema in keep-when`
-    );
-    check(
-      matchFn.with({ rename: { replace: P.select() } }, isValidEventName),
-      `step '${name}' uses an invalid rename.replace value: ` +
-        "it must be a proper event name"
-    );
-    check(
-      matchFn.with(
-        { rename: { append: P.select(P.string) } },
-        (append) =>
-          (append.startsWith(".") && isValidEventName(append.slice(1))) ||
-          isValidEventName(append)
-      ),
-      `step '${name}' uses an invalid rename.append value: ` +
-        "it must be a proper event name suffix"
-    );
-    check(
-      matchFn.with(
-        { rename: { prepend: P.select(P.string) } },
-        (prepend) =>
-          (prepend.endsWith(".") && isValidEventName(prepend.slice(0, -1))) ||
-          isValidEventName(prepend)
-      ),
-      `step '${name}' uses an invalid rename.prepend value: ` +
-        "it must be a proper event name prefix"
-    );
-    check(
-      matchFn.with({ "expose-http": { port: P.select(P.string) } }, (rawPort) =>
-        ((port) => port >= 1 && port <= 65535)(parseInt(rawPort, 10))
-      ),
-      `step '${name}' uses an invalid expose-http.port value ` +
-        "(must be between 1 and 65535, inclusive)"
-    );
-    check(
-      matchFn.with({ "send-receive-jq": { wrap: P.select() } }, (wrap) =>
-        validateWrap(wrap, `step '${name}' wrap option`)
-      )
-    );
-    check(
-      matchFn.with({ "send-receive-http": { wrap: P.select() } }, (wrap) =>
-        validateWrap(wrap, `step '${name}' wrap option`)
-      )
-    );
+    // Check specific functions.
+    const template = (definition.flatmap ??
+      definition.reduce) as StepFunctionTemplate;
+    const [stepFunctionName, stepFunctionOptions] = Object.entries(template)[0];
+    stepFunctionModules[
+      stepFunctionName as keyof typeof stepFunctionModules
+    ].validate(name, stepFunctionOptions);
   });
   // 3. Check the pipeline's graph soundness.
   const dummyStepFactory = () => Promise.reject("not a real step factory");
@@ -456,20 +303,15 @@ export const runPipeline = async (
 ): Promise<[Promise<void>, () => void]> => {
   // Setup initialization arguments.
   const signature = await getSignature(template);
-  const ctx: [string, string] = [template.name, signature];
   // Zero pipeline metrics.
   pipelineEvents.inc({ flow: "in" }, 0);
   pipelineEvents.inc({ flow: "out" }, 0);
   deadEvents.set(0);
   // Create the input channel.
-  const [inputChannel, inputEnded] = match(template.input)
-    .with({ redis: P.select() }, (c) => makeRedisInput(...ctx, c))
-    .with({ poll: P.select() }, (c) => makePollInput(...ctx, c))
-    .with({ http: P.select() }, (c) => makeHTTPInput(...ctx, c))
-    .with({ tail: P.select() }, (c) => makeTailInput(...ctx, c))
-    .with({ stdin: P.select() }, (c) => makeSTDINInput(...ctx, c))
-    .with({ generator: P.select() }, (c) => makeGeneratorInput(...ctx, c))
-    .exhaustive();
+  const [inputName, inputOptions] = Object.entries(template.input)[0];
+  const [inputChannel, inputEnded] = inputModules[
+    inputName as keyof typeof inputModules
+  ].make(template.name, signature, inputOptions);
   // Create the pipeline channel.
   const steps: StepDefinition[] = [];
   for (const [name, definition] of Object.entries(template.steps ?? {})) {
@@ -500,31 +342,12 @@ export const runPipeline = async (
       patternMode,
       functionMode,
     };
-    const fn = await match(definition[functionMode] as StepFunctionTemplate)
-      .with({ "send-receive-http": P.select() }, (f) =>
-        makeSendReceiveHTTPFunction(...ctx, f)
-      )
-      .with({ "send-receive-jq": P.select() }, (f) =>
-        makeSendReceiveJqFunction(...ctx, f)
-      )
-      .with({ "expose-http": P.select() }, (f) =>
-        makeExposeHTTPFunction(...ctx, f)
-      )
-      .with({ "send-redis": P.select() }, (f) =>
-        makeSendRedisFunction(...ctx, f)
-      )
-      .with({ "send-http": P.select() }, (f) => makeSendHTTPFunction(...ctx, f))
-      .with({ "send-file": P.select() }, (f) => makeSendFileFunction(...ctx, f))
-      .with({ "send-stdout": P.select() }, (f) =>
-        makeSendSTDOUTFunction(...ctx, f)
-      )
-      .with({ "keep-when": P.select() }, (f) => makeKeepWhenFunction(...ctx, f))
-      .with({ deduplicate: P.select() }, (f) =>
-        makeDeduplicateFunction(...ctx, f)
-      )
-      .with({ rename: P.select() }, (f) => makeRenameFunction(...ctx, f))
-      .with({ keep: P.select() }, (f) => makeKeepFunction(...ctx, f))
-      .exhaustive();
+    const [stepFunctionName, stepFunctionOptions] = Object.entries(
+      definition[functionMode] as StepFunctionTemplate
+    )[0];
+    const fn = await stepFunctionModules[
+      stepFunctionName as keyof typeof stepFunctionModules
+    ].make(template.name, signature, stepFunctionOptions);
     const factory = makeWindowed(options, fn);
     steps.push({
       name,

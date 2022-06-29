@@ -1,5 +1,12 @@
+import { match, P } from "ts-pattern";
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
-import { Event, WrapDirective, wrapDirectiveSchema } from "../event";
+import {
+  Event,
+  WrapDirective,
+  wrapDirectiveSchema,
+  validateWrap,
+} from "../event";
+import { check } from "../utils";
 import { sendReceiveEvents, sendReceiveThing } from "../io/http-client";
 import { makeChannel } from "../io/jq";
 
@@ -45,6 +52,24 @@ export const optionsSchema = {
       required: ["target"],
     },
   ],
+};
+
+/**
+ * Validate send-receive-http options, after they've been checked by
+ * the ajv schema.
+ *
+ * @param name The name of the step this function belongs to.
+ * @param options The options to validate.
+ */
+export const validate = (
+  name: string,
+  options: SendReceiveHTTPFunctionOptions
+): void => {
+  check(
+    match(options).with({ wrap: P.select() }, (wrap) =>
+      validateWrap(wrap, `step '${name}' wrap option`)
+    )
+  );
 };
 
 /**

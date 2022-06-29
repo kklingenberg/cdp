@@ -289,6 +289,84 @@ events that wrap the input data.
 **`input.poll.wrap.raw`** optional **boolean**, whether to treat
 incoming data as plain text, not JSON.
 
+#### `amqp`
+
+**`input.amqp`** **object**, the input form that makes the pipeline
+receive data from an AMQP broker using the AMQP 0-9-1 protocol
+(e.g. [RabbitMQ](https://www.rabbitmq.com/)).
+
+The `amqp` input form reacts to backpressure signals by not sending
+the message ACK back to the broker. This causes messages to be kept in
+queue. The `amqp` input form also periodically instructs the broker to
+"recover" non-acked messages so that they can be eventually consumed
+again, once the backpressure signal is turned off.
+
+**`input.amqp.url`** required **string**, the URL of the broker to
+connect to.
+
+**`input.amqp.exchange`** required **object**, the description of the
+AMQP exchange to assert. For a description of AMQP exchanges, you may
+read the [AMQP 0-9-1 Model
+explanation](https://www.rabbitmq.com/tutorials/amqp-concepts.html) by
+RabbitMQ.
+
+**`input.amqp.exchange.name`** required **string**, the name of the
+AMQP exchange to assert.
+
+**`input.amqp.exchange.type`** required **"direct"**, **"fanout"** or
+**"topic"**, the type of AMQP exchange to assert.
+
+**`input.amqp.exchange.durable`** optional **boolean**, **"true"** or
+**"false"**, whether the exchange should be declared as _durable_ or
+not (default is `true`).
+
+**`input.amqp.exchange.auto-delete`** optional **boolean**, **"true"**
+or **"false"**, whether the exchange should be automatically deleted
+once no more queues are bound to it (default is `false`).
+
+**`input.amqp.binding-pattern`** optional **string**, the pattern used
+by the binding between channel and queue. The meaning of the pattern
+depends on the type of exchange. Check the AMQP documentation for
+details. If omitted, it will default to `"cdp"` for `direct`
+exchanges, the empty string for `fanout` exchanges, and `"#"` (the
+match-all pattern) for `topic` exchanges.
+
+**`input.amqp.queue`** optional **object**, the description of the
+AMQP queue to assert. If omitted, all configuration values (including
+the queue's name) will be assigned by the broker.
+
+**`input.amqp.queue.name`** optional **string**, the name of the queue
+to assert.
+
+**`input.amqp.queue.durable`** optional **boolean**, **"true"**, or
+**"false"**, whether the queue should be declared as _durable_ or not
+(default is `true`).
+
+**`input.amqp.queue.auto-delete`** optional **boolean**, **"true"**,
+or **"false"**, whether the queue should be automatically deleted once
+no more consumers are present (default is `false`).
+
+**`input.amqp.queue.message-ttl`** optional **number** or **string**,
+the maximum amount of time in milliseconds a message can stay in the
+queue unconsumed.
+
+**`input.amqp.queue.expires`** optional **number** or **string**, the
+maximum amount of time in milliseconds the queue can survive without
+consumers active. Similar to `auto-delete`, which applies immediately
+if set to `true`.
+
+**`input.amqp.queue.dead-letter-exchange`** optional **string**, the
+name of an exchange to send messages to once they expire.
+
+**`input.amqp.queue.max-length`** optional **number** or **string**,
+the maximum size of the queue. Old messages pushed out of the queue
+will be sent to the dead-letter exchange, if set.
+
+**`input.amqp.queue.max-priority`** optional **number** or **string**,
+the maximum value for `priority`, if used. Check the
+[documentation](https://www.rabbitmq.com/priority.html) for more
+information.
+
 #### `redis`
 
 **`input.redis`** **object**, the input form that makes the pipeline
@@ -587,9 +665,20 @@ from each group except for the first one.
 
 #### `keep`
 
-**`steps.<name>.(reduce|flatmap).keep`** **number** or **string**, a
-function that selects the first few events from an event vector, the
-number of events kept being the specified value.
+**`steps.<name>.(reduce|flatmap).keep`** **number** or **string** or
+**object**, a function that selects the first few events from an event
+vector, the number of events kept being the specified value.
+
+**`steps.<name>.(reduce|flatmap).keep.first`** **number** or
+**string**, the value indicating the maximum amount of events to keep
+from the start of the event vector.
+
+**`steps.<name>.(reduce|flatmap).keep.last`** **number** or
+**string**, the value indicating the maximum amount of events to keep
+from the end of the event vector.
+
+Only one of `first` or `last` may be used. Using a value directly is
+equivalent to using `first`.
 
 #### `keep-when`
 
@@ -654,6 +743,51 @@ altered.
 **number** or **string**, the maximum amount of concurrent HTTP
 requests for the step. If omitted, it is set to the value of the
 `HTTP_CLIENT_DEFAULT_CONCURRENCY` environment variable or `10`.
+
+#### `send-amqp`
+
+**`steps.<name>.(reduce|flatmap).send-amqp`** **object**, a function
+that always sends forward the events in the vectors it receives,
+unmodified. It also sends those vectors to the specified AMQP broker.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.url`** required **string**,
+the URL of the broker to connect to.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange`** required
+**object**, the description of the AMQP exchange to assert, in the
+same shape as the [amqp input form](#amqp)'s.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.name`** required
+**string**, the name f the AMQP exchange to assert.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.type`** required
+**"direct"**, **"fanout"** or **"topic"**, the type of AMQP exchange
+to assert.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.durable`**
+optional **boolean**, **"true"** or **"false"**, whether the exchange
+should be declared as _durable_ or not (default is `true`).
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.auto-delete`**
+optional **boolean**, **"true"** or **"false"**, whether the exchange
+should be automatically deleted once no more queues are bound to it
+(default is `false`).
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.routing-key`**
+optional **string**, the routing key used to publish each
+message. Defaults to `"cdp"` for both `direct` and `topic` exchange
+types, and the empty string for the `fanout` exchange type.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.expiration`**
+optional **number** or **string**, the expiration set for each
+message, in milliseconds.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.priority`**
+optional **number** or **string**, the priority set for each message.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.persistent`**
+optional **boolean**, **"true"** or **"false"**, whether the message
+should survive broker restarts (provided the queue does too).
 
 #### `send-redis`
 

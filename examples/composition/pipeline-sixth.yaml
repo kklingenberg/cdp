@@ -1,0 +1,22 @@
+---
+name: "sixth"
+input:
+  amqp:
+    url: amqp://rabbitmq:5672
+    exchange:
+      name: cdp-composition
+      type: topic
+    binding-pattern: from.*.to.sixth
+
+steps:
+  debug:
+    flatmap:
+      send-stdout:
+        jq-expr: |-
+          [
+            .[].n, ": ",
+            (.[].d | if . == null then "<nothing>" else . end),
+            " (",
+            (.[].t | map(.p) | join(" --> ")),
+            ")"
+          ] | join("")

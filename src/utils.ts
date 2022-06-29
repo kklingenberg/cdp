@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import Ajv from "ajv";
+import { match } from "ts-pattern";
 
 /**
  * Central Ajv instance for the whole application.
@@ -21,6 +22,30 @@ export const compileThrowing = <T>(schema: object): ((value: T) => T) => {
     }
     return value;
   };
+};
+
+/**
+ * Extract the type of ts-pattern's match objects for boolean returns.
+ */
+class BooleanMatchTypeExtractor<T> {
+  wrappedMatch(v: T) {
+    return match<T, boolean>(v);
+  }
+}
+type BooleanMatch<T> = ReturnType<BooleanMatchTypeExtractor<T>["wrappedMatch"]>;
+
+/**
+ * Uses a match expression as a predicate, which throws an error for
+ * false values.
+ *
+ * @param m The match expression built with ts-pattern's match().
+ * @param message A message to use for the error thrown on false
+ * return values.
+ */
+export const check = <T>(m: BooleanMatch<T>, message?: string): void => {
+  if (!m.otherwise(() => true)) {
+    throw new Error(message ?? "validation error");
+  }
 };
 
 /**
@@ -116,3 +141,34 @@ export const mergeHeaders = <T>(
     }),
     {}
   );
+
+/**
+ * Make a fuse, which is a boolean flag started at `false` in three
+ * flavours: a getter method for the current value, a setter method to
+ * set it to `true`, and a promise that resolves once the setter is
+ * called. A fuse can only be set to `true` once.
+ *
+ * @returns A new fuse.
+ */
+export const makeFuse = () => {
+  let flag = false;
+  let notify: () => void;
+  const promise = (
+    new Promise((resolve) => {
+      notify = resolve;
+    }) as Promise<void>
+  ).then(() => {
+    flag = true;
+  });
+  return {
+    value: () => flag,
+    trigger: () =>
+      (
+        notify ??
+        (() => {
+          // Oops, triggered before it's ready.
+        })
+      )(),
+    promise,
+  };
+};

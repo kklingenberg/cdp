@@ -1,18 +1,27 @@
+import { PassThrough, Readable } from "stream";
+// Mock the stdio wrapper module.
+const stdoutMock = {
+  current: null,
+} as {
+  current: Readable | null;
+};
+const mockSTDOUTGetter = jest.fn(() => {
+  const mock = new PassThrough();
+  mock.setEncoding("utf-8");
+  stdoutMock.current = mock;
+  return mock;
+});
+jest.mock("../src/io/stdio", () => {
+  const originalModule = jest.requireActual("../src/io/stdio");
+  return {
+    ...originalModule,
+    getSTDOUT: mockSTDOUTGetter,
+  };
+});
+afterEach(() => mockSTDOUTGetter.mockClear());
+
 import { makePipelineTemplate, runPipeline } from "../src/api";
 import { resolveAfter } from "../src/utils";
-
-// Mock for console.log.
-let mockedConsoleLog: jest.SpyInstance<void>;
-
-beforeEach(() => {
-  mockedConsoleLog = jest.spyOn(console, "log").mockImplementation(() => {
-    // Prevent log messages during these tests.
-  });
-});
-
-afterEach(() => {
-  mockedConsoleLog.mockRestore();
-});
 
 test("@standalone Pipeline template construction works normally", () => {
   // Arrange
@@ -135,9 +144,9 @@ test("@standalone Stopping a pipeline drains the events", async () => {
   // Assert
   // 10 slices should have passed, because there are 10 intervals of
   // size 0.1 seconds in 1 second.
-  expect(mockedConsoleLog.mock.calls).toEqual(
-    Array.from({ length: 10 }, (_, index) => [
-      JSON.stringify({ count: 10 - index }),
-    ])
+  expect(stdoutMock.current?.read()).toEqual(
+    Array.from({ length: 10 }, (_, index) =>
+      JSON.stringify({ count: 10 - index })
+    ).join("\n") + "\n"
   );
 });

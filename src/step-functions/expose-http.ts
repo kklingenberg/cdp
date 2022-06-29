@@ -1,8 +1,9 @@
 import Koa from "koa";
+import { match, P } from "ts-pattern";
 import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
-import { getSignature, mergeHeaders } from "../utils";
+import { check, getSignature, mergeHeaders } from "../utils";
 import { makeHTTPServer } from "../io/http-server";
 import { makeChannel } from "../io/jq";
 
@@ -55,6 +56,26 @@ export const optionsSchema = {
   },
   additionalProperties: false,
   required: ["endpoint", "port", "responses"],
+};
+
+/**
+ * Validate expose-http options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param name The name of the step this function belongs to.
+ * @param options The options to validate.
+ */
+export const validate = (
+  name: string,
+  options: ExposeHTTPFunctionOptions
+): void => {
+  check(
+    match(options).with({ port: P.select(P.string) }, (rawPort) =>
+      ((port) => port >= 1 && port <= 65535)(parseInt(rawPort, 10))
+    ),
+    `step '${name}' uses an invalid expose-http.port value ` +
+      "(must be between 1 and 65535, inclusive)"
+  );
 };
 
 /**

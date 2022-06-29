@@ -122,10 +122,11 @@ export class AsyncQueue<Type> {
     });
     this.iterator = async function* () {
       while (true) {
-        try {
-          yield await this.shift();
-        } catch (err) {
+        const [isClosed, value] = await this.#shift();
+        if (isClosed) {
           break;
+        } else {
+          yield value;
         }
       }
     };
@@ -161,14 +162,13 @@ export class AsyncQueue<Type> {
 
   /**
    * Shift a single value from the start of the queue. Resolves only
-   * when there's at least one value to shift, or the queue is closed.
+   * when there's at least one value to shift, or the queue is
+   * closed. Resolves to a pair [isClosed, value].
    */
-  async shift(): Promise<Type> {
+  async #shift(): Promise<[true, null] | [false, Type]> {
     await this.lock;
     if (this.data.length === 0) {
-      throw new Error(
-        `shift() attempted on an empty closed queue: ${this.name}`
-      );
+      return [true, null];
     }
     const value = this.data.shift() as Type;
     if (this.data.length === 0 && !this.closed) {
@@ -178,6 +178,20 @@ export class AsyncQueue<Type> {
     } else if (this.data.length === 0 && this.closed) {
       this.notifyDrained();
       activeQueues.delete(this);
+    }
+    return [false, value];
+  }
+
+  /**
+   * Shift a single value from the start of the queue. Resolves only
+   * when there's at least one value to shift, or the queue is closed.
+   */
+  async shift(): Promise<Type> {
+    const [isClosed, value] = await this.#shift();
+    if (isClosed) {
+      throw new Error(
+        `shift() attempted on an empty closed queue: ${this.name}`
+      );
     }
     return value;
   }
@@ -221,7 +235,9 @@ export const flatMap = <A, B, C>(
   const receiverFinished: Promise<void> = new Promise((resolve) => {
     notifyFinished = resolve;
   });
+  let started = false;
   async function* receiver() {
+    started = true;
     for await (const b of channel.receive) {
       for (const c of await fn(b)) {
         yield c;
@@ -234,7 +250,9 @@ export const flatMap = <A, B, C>(
     receive: receiver(),
     close: async () => {
       await channel.close();
-      await receiverFinished;
+      if (started) {
+        await receiverFinished;
+      }
     },
   };
 };

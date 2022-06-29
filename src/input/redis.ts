@@ -1,3 +1,4 @@
+import { match, P } from "ts-pattern";
 import { Readable } from "stream";
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import {
@@ -9,6 +10,7 @@ import {
   wrapDirectiveSchema,
   chooseParser,
   makeWrapper,
+  validateWrap,
 } from "../event";
 import {
   connect,
@@ -19,7 +21,7 @@ import {
 } from "../io/redis";
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
-import { resolveAfter } from "../utils";
+import { check, resolveAfter, makeFuse } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -81,6 +83,20 @@ export const optionsSchema = {
 };
 
 /**
+ * Validate redis input options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param options The options to validate.
+ */
+export const validate = (options: RedisInputOptions): void => {
+  check(
+    match(options).with({ wrap: P.select() }, (wrap) =>
+      validateWrap(wrap, "the input's wrap option")
+    )
+  );
+};
+
+/**
  * Timeout in seconds for BLPOP and BRPOP operations.
  */
 const POP_TIMEOUT = 5;
@@ -131,18 +147,7 @@ export const make = (
     }
     return things;
   }, new AsyncQueue<string>("input.redis").asChannel());
-
-  // The same thing in three flavours: a stopping flag, a callback,
-  // and a promise.
-  let isDone = false;
-  let notifyDone: () => void;
-  const done = (
-    new Promise((resolve) => {
-      notifyDone = resolve;
-    }) as Promise<void>
-  ).then(() => {
-    isDone = true;
-  });
+  const done = makeFuse();
 
   // Initialize endless redis consumption
   const consuming = (async () => {
@@ -153,7 +158,7 @@ export const make = (
           channel.send(message);
         });
         await client.subscribe(...toargs(options.subscribe));
-        await done;
+        await done.promise;
       } catch (err) {
         logger.error(`Couldn't subscribe to channel(s): ${err}`);
       } finally {
@@ -167,7 +172,7 @@ export const make = (
           channel.send(message);
         });
         await client.psubscribe(...toargs(options.psubscribe));
-        await done;
+        await done.promise;
       } catch (err) {
         logger.error(`Couldn't psubscribe to channel pattern(s): ${err}`);
       } finally {
@@ -176,24 +181,15 @@ export const make = (
       }
     } else if (typeof options.blpop !== "undefined") {
       try {
-        await Promise.race([
-          (async () => {
-            while (!isDone) {
-              const result = await (backpressure.status()
-                ? resolveAfter(POP_TIMEOUT * 1000).then(() => null)
-                : client.blpop(toargs(options.blpop), POP_TIMEOUT));
-              if (result !== null) {
-                logger.debug(
-                  "Got message from redis list",
-                  result[0],
-                  result[1]
-                );
-                channel.send(result[1]);
-              }
-            }
-          })(),
-          done,
-        ]);
+        while (!done.value()) {
+          const result = await (backpressure.status()
+            ? resolveAfter(POP_TIMEOUT * 1000).then(() => null)
+            : client.blpop(toargs(options.blpop), POP_TIMEOUT));
+          if (result !== null) {
+            logger.debug("Got message from redis list", result[0], result[1]);
+            channel.send(result[1]);
+          }
+        }
       } catch (err) {
         logger.error(`Couldn't blpop from key(s): ${err}`);
       } finally {
@@ -201,24 +197,15 @@ export const make = (
       }
     } else if (typeof options.brpop !== "undefined") {
       try {
-        await Promise.race([
-          (async () => {
-            while (!isDone) {
-              const result = await (backpressure.status()
-                ? resolveAfter(POP_TIMEOUT * 1000).then(() => null)
-                : client.brpop(toargs(options.brpop), POP_TIMEOUT));
-              if (result !== null) {
-                logger.debug(
-                  "Got message from redis list",
-                  result[0],
-                  result[1]
-                );
-                channel.send(result[1]);
-              }
-            }
-          })(),
-          done,
-        ]);
+        while (!done.value()) {
+          const result = await (backpressure.status()
+            ? resolveAfter(POP_TIMEOUT * 1000).then(() => null)
+            : client.brpop(toargs(options.brpop), POP_TIMEOUT));
+          if (result !== null) {
+            logger.debug("Got message from redis list", result[0], result[1]);
+            channel.send(result[1]);
+          }
+        }
       } catch (err) {
         logger.error(`Couldn't brpop from key(s): ${err}`);
       } finally {
@@ -237,7 +224,7 @@ export const make = (
           return false;
         },
         close: async () => {
-          notifyDone();
+          done.trigger();
           await channel.close();
           logger.debug("Drained redis input");
         },
