@@ -40,6 +40,8 @@ import * as renameFunctionModule from "./step-functions/rename";
 import { RenameFunctionOptions } from "./step-functions/rename";
 import * as exposeHTTPFunctionModule from "./step-functions/expose-http";
 import { ExposeHTTPFunctionOptions } from "./step-functions/expose-http";
+import * as sendAMQPFunctionModule from "./step-functions/send-amqp";
+import { SendAMQPFunctionOptions } from "./step-functions/send-amqp";
 import * as sendRedisFunctionModule from "./step-functions/send-redis";
 import { SendRedisFunctionOptions } from "./step-functions/send-redis";
 import * as sendHTTPFunctionModule from "./step-functions/send-http";
@@ -116,6 +118,7 @@ const stepFunctionModules = {
   "send-stdout": sendSTDOUTFunctionModule,
   "send-file": sendFileFunctionModule,
   "send-http": sendHTTPFunctionModule,
+  "send-amqp": sendAMQPFunctionModule,
   "send-redis": sendRedisFunctionModule,
   "expose-http": exposeHTTPFunctionModule,
   "send-receive-jq": sendReceiveJqFunctionModule,
@@ -133,6 +136,7 @@ type StepFunctionTemplate =
   | { "send-stdout": SendSTDOUTFunctionOptions }
   | { "send-file": SendFileFunctionOptions }
   | { "send-http": SendHTTPFunctionOptions }
+  | { "send-amqp": SendAMQPFunctionOptions }
   | { "send-redis": SendRedisFunctionOptions }
   | { "expose-http": ExposeHTTPFunctionOptions }
   | { "send-receive-jq": SendReceiveJqFunctionOptions }

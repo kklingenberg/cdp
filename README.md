@@ -295,6 +295,12 @@ incoming data as plain text, not JSON.
 receive data from an AMQP broker using the AMQP 0-9-1 protocol
 (e.g. [RabbitMQ](https://www.rabbitmq.com/)).
 
+The `amqp` input form reacts to backpressure signals by not sending
+the message ACK back to the broker. This causes messages to be kept in
+queue. The `amqp` input form also periodically instructs the broker to
+"recover" non-acked messages so that they can be eventually consumed
+again, once the backpressure signal is turned off.
+
 **`input.amqp.url`** required **string**, the URL of the broker to
 connect to.
 
