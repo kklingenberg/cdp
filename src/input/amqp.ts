@@ -53,7 +53,7 @@ export interface AMQPInputOptions {
 export const optionsSchema = {
   type: "object",
   properties: {
-    url: { type: "string", pattern: "^ampqs?://.*$" },
+    url: { type: "string", pattern: "^amqps?://.*$" },
     exchange: {
       type: "object",
       properties: {

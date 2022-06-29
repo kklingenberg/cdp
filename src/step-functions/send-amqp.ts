@@ -35,7 +35,7 @@ export interface SendAMQPFunctionOptions {
 export const optionsSchema = {
   type: "object",
   properties: {
-    url: { type: "string", pattern: "^ampqs?://.*$" },
+    url: { type: "string", pattern: "^amqps?://.*$" },
     exchange: {
       type: "object",
       properties: {
@@ -175,6 +175,12 @@ export const make = async (
             ...publishOptions,
           }
         );
+        logger.debug(
+          "Published payload to AMQP exchange",
+          exchange,
+          "with routing key",
+          routingKey
+        );
         if (!flushed) {
           await new Promise((resolve) => ch.once("drain", resolve));
         }
@@ -198,6 +204,12 @@ export const make = async (
             ...publishOptions,
           }
         );
+        logger.debug(
+          "Published events to AMQP exchange",
+          exchange,
+          "with routing key",
+          routingKey
+        );
         if (!flushed) {
           await new Promise((resolve) => ch.once("drain", resolve));
         }
@@ -216,6 +228,7 @@ export const make = async (
     close: async () => {
       await forwardingChannel.close();
       await closeExternal();
+      await ch.close();
       await conn.close();
     },
   };

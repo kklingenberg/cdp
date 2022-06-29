@@ -744,6 +744,51 @@ altered.
 requests for the step. If omitted, it is set to the value of the
 `HTTP_CLIENT_DEFAULT_CONCURRENCY` environment variable or `10`.
 
+#### `send-amqp`
+
+**`steps.<name>.(reduce|flatmap).send-amqp`** **object**, a function
+that always sends forward the events in the vectors it receives,
+unmodified. It also sends those vectors to the specified AMQP broker.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.url`** required **string**,
+the URL of the broker to connect to.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange`** required
+**object**, the description of the AMQP exchange to assert, in the
+same shape as the [amqp input form](#amqp)'s.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.name`** required
+**string**, the name f the AMQP exchange to assert.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.type`** required
+**"direct"**, **"fanout"** or **"topic"**, the type of AMQP exchange
+to assert.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.durable`**
+optional **boolean**, **"true"** or **"false"**, whether the exchange
+should be declared as _durable_ or not (default is `true`).
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.auto-delete`**
+optional **boolean**, **"true"** or **"false"**, whether the exchange
+should be automatically deleted once no more queues are bound to it
+(default is `false`).
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.routing-key`**
+optional **string**, the routing key used to publish each
+message. Defaults to `"cdp"` for both `direct` and `topic` exchange
+types, and the empty string for the `fanout` exchange type.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.expiration`**
+optional **number** or **string**, the expiration set for each
+message, in milliseconds.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.priority`**
+optional **number** or **string**, the priority set for each message.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.persistent`**
+optional **boolean**, **"true"** or **"false"**, whether the message
+should survive broker restarts (provided the queue does too).
+
 #### `send-redis`
 
 **`steps.<name>.(reduce|flatmap).send-redis`** **object**, a function

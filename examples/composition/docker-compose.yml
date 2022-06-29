@@ -45,9 +45,19 @@ services:
     command: ["/app/pipeline-fifth.yaml"]
     depends_on:
       - redis
+      - sixth
+
+  sixth:
+    <<: *cdp
+    command: ["/app/pipeline-sixth.yaml"]
+    depends_on:
+      - rabbitmq
 
   redis:
     image: redis:7-alpine
+
+  rabbitmq:
+    image: rabbitmq:3-alpine
 
 volumes:
   bridge:
