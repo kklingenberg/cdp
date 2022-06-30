@@ -15,7 +15,7 @@ import {
 } from "../event";
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
-import { check, resolveAfter, makeFuse } from "../utils";
+import { check, makeFuse } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -147,11 +147,6 @@ export const validate = (options: AMQPInputOptions): void => {
 };
 
 /**
- * Milliseconds to wait after a channel.recover().
- */
-const MESSAGE_RECOVERY_INTERVAL = 5000;
-
-/**
  * Creates an input channel based on data received from an AMQP
  * broker, dispatched to a queue bound to a channel.
  *
@@ -259,7 +254,6 @@ export const make = (
           { direct: "cdp", fanout: "", topic: "#" }[options.exchange.type]
       );
 
-      let scheduleRecovery = false;
       const { consumerTag } = await ch.consume(queue, (message) => {
         if (message === null) {
           return;
@@ -268,23 +262,23 @@ export const make = (
           logger.debug("Got message from amqp broker", message);
           channel.send(message.content.toString());
           ch.ack(message);
-        } else {
-          scheduleRecovery = true;
         }
       });
-      await Promise.race([
-        done.promise,
-        (async () => {
-          while (!done.value()) {
-            if (scheduleRecovery) {
-              await ch.recover();
-              scheduleRecovery = false;
-            }
-            await resolveAfter(MESSAGE_RECOVERY_INTERVAL);
-          }
-        })(),
-      ]);
-      await ch.cancel(consumerTag);
+      let recoveryChain = Promise.resolve();
+      backpressure.on("off", () => {
+        recoveryChain = recoveryChain.then(() =>
+          ch.recover().then(
+            () => {
+              // Disregard the return value of ch.recover().
+            },
+            (err) =>
+              logger.warn(`Couldn't recover messages from broker: ${err}`)
+          )
+        );
+      });
+      await done.promise;
+      await recoveryChain;
+      await await ch.cancel(consumerTag);
 
       await ch.close();
     } finally {
