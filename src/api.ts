@@ -27,6 +27,8 @@ import * as pollInputModule from "./input/poll";
 import { PollInputOptions } from "./input/poll";
 import * as amqpInputModule from "./input/amqp";
 import { AMQPInputOptions } from "./input/amqp";
+import * as mqttInputModule from "./input/mqtt";
+import { MQTTInputOptions } from "./input/mqtt";
 import * as redisInputModule from "./input/redis";
 import { RedisInputOptions } from "./input/redis";
 // Step functions
@@ -86,6 +88,7 @@ const inputModules = {
   http: httpInputModule,
   poll: pollInputModule,
   amqp: amqpInputModule,
+  mqtt: mqttInputModule,
   redis: redisInputModule,
 };
 
@@ -99,6 +102,7 @@ type InputTemplate =
   | { http: HTTPInputOptions }
   | { poll: PollInputOptions }
   | { amqp: AMQPInputOptions }
+  | { mqtt: MQTTInputOptions }
   | { redis: RedisInputOptions };
 const inputTemplateSchema = {
   anyOf: Object.entries(inputModules).map(([key, mod]) =>
