@@ -291,30 +291,33 @@ incoming data as plain text, not JSON.
 
 #### `amqp`
 
-**`input.amqp`** **object**, the input form that makes the pipeline
-receive data from an AMQP broker using the AMQP 0-9-1 protocol
-(e.g. [RabbitMQ](https://www.rabbitmq.com/)).
+**`input.amqp`** **string** or **object**, the input form that makes
+the pipeline receive data from an AMQP broker using the AMQP 0-9-1
+protocol (e.g. [RabbitMQ](https://www.rabbitmq.com/)). If given a
+string, it will be interpreted as a URL and all other parameters will
+be set to their respective defaults.
 
 The `amqp` input form reacts to backpressure signals by not sending
 the message ACK back to the broker. This causes messages to be kept in
-queue. The `amqp` input form also periodically instructs the broker to
-"recover" non-acked messages so that they can be eventually consumed
-again, once the backpressure signal is turned off.
+queue. The `amqp` input form also instructs the broker to "recover"
+non-acked messages once backpressure is turned off, so that they can
+be eventually consumed again.
 
 **`input.amqp.url`** required **string**, the URL of the broker to
 connect to.
 
-**`input.amqp.exchange`** required **object**, the description of the
+**`input.amqp.exchange`** optional **object**, the description of the
 AMQP exchange to assert. For a description of AMQP exchanges, you may
 read the [AMQP 0-9-1 Model
 explanation](https://www.rabbitmq.com/tutorials/amqp-concepts.html) by
 RabbitMQ.
 
-**`input.amqp.exchange.name`** required **string**, the name of the
-AMQP exchange to assert.
+**`input.amqp.exchange.name`** optional **string**, the name of the
+AMQP exchange to assert. If omitted, it will default to `"cdp"`.
 
 **`input.amqp.exchange.type`** required **"direct"**, **"fanout"** or
-**"topic"**, the type of AMQP exchange to assert.
+**"topic"**, the type of AMQP exchange to assert. If omitted, it will
+default to `"topic"`.
 
 **`input.amqp.exchange.durable`** optional **boolean**, **"true"** or
 **"false"**, whether the exchange should be declared as _durable_ or
@@ -366,6 +369,52 @@ will be sent to the dead-letter exchange, if set.
 the maximum value for `priority`, if used. Check the
 [documentation](https://www.rabbitmq.com/priority.html) for more
 information.
+
+**`input.amqp.wrap`** optional **string** or **object**, a wrapping
+directive which specifies that incoming data is not encoded events,
+and thus should be wrapped.
+
+**`input.amqp.wrap.name`** required **string**, the name given to the
+events that wrap the input data.
+
+**`input.amqp.wrap.raw`** optional **boolean**, whether to treat
+incoming data as plain text, not JSON.
+
+#### `mqtt`
+
+**`input.mqtt`** **string** or **object**, the input form that makes
+the pipeline receive data from a MQTT broker. If given a string, it
+will be interpreted as a URL and all other parameters will be set to
+their respective defaults.
+
+The `mqtt` input form reacts to backpressure signals by delaying the
+message handling through the [MQTT.js library's
+`handleMessage`](https://github.com/mqttjs/MQTT.js#handleMessage)
+hook.
+
+**`input.mqtt.url`** required **string**, the URL of the broker to
+connect to.
+
+**`input.mqtt.options`** optional **object**, the connection
+options. Check the
+[MQTT.js](https://github.com/mqttjs/MQTT.js#mqttclientstreambuilder-options)
+library for details.
+
+**`input.mqtt.topic`** optional **string**, **list of string** or
+**object**, the topic or topics to subscribe to. If given as an
+object, the topic names will be the keys, and the values are QoS
+specifications of the form `{qos: 0 | 1 | 2}`. If omitted, the client
+will subscribe to `"cdp/#"`.
+
+**`input.mqtt.wrap`** optional **string** or **object**, a wrapping
+directive which specifies that incoming data is not encoded events,
+and thus should be wrapped.
+
+**`input.mqtt.wrap.name`** required **string**, the name given to the
+events that wrap the input data.
+
+**`input.mqtt.wrap.raw`** optional **boolean**, whether to treat
+incoming data as plain text, not JSON.
 
 #### `redis`
 
@@ -746,23 +795,26 @@ requests for the step. If omitted, it is set to the value of the
 
 #### `send-amqp`
 
-**`steps.<name>.(reduce|flatmap).send-amqp`** **object**, a function
-that always sends forward the events in the vectors it receives,
-unmodified. It also sends those vectors to the specified AMQP broker.
+**`steps.<name>.(reduce|flatmap).send-amqp`** **string** or
+**object**, a function that always sends forward the events in the
+vectors it receives, unmodified. It also sends those vectors to the
+specified AMQP broker. If given a string, it will be interpreted as a
+URL and all other parameters will be set to their respective defaults.
 
 **`steps.<name>.(reduce|flatmap).send-amqp.url`** required **string**,
 the URL of the broker to connect to.
 
-**`steps.<name>.(reduce|flatmap).send-amqp.exchange`** required
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange`** optional
 **object**, the description of the AMQP exchange to assert, in the
 same shape as the [amqp input form](#amqp)'s.
 
-**`steps.<name>.(reduce|flatmap).send-amqp.exchange.name`** required
-**string**, the name f the AMQP exchange to assert.
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.name`** optional
+**string**, the name of the AMQP exchange to assert. If omitted, it
+will default to `"cdp"`.
 
-**`steps.<name>.(reduce|flatmap).send-amqp.exchange.type`** required
+**`steps.<name>.(reduce|flatmap).send-amqp.exchange.type`** optional
 **"direct"**, **"fanout"** or **"topic"**, the type of AMQP exchange
-to assert.
+to assert. If omitted, it will default to `"topic"`.
 
 **`steps.<name>.(reduce|flatmap).send-amqp.exchange.durable`**
 optional **boolean**, **"true"** or **"false"**, whether the exchange

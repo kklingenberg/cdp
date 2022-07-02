@@ -138,7 +138,7 @@ export const make = (
 
   const client =
     typeof options === "string" || typeof options.options === "undefined"
-      ? connect(url)
+      ? connect(url, {})
       : connect(url, options.options);
   // Emit backpressure as documented here:
   // https://github.com/mqttjs/MQTT.js#mqttclienthandlemessagepacket-callback
@@ -162,17 +162,30 @@ export const make = (
       }
     });
   });
-  client.on("message", (topic, message) => {
-    logger.debug("Got message from MQTT topic", topic, ":", message);
+  client.on("message", (fromTopic, message) => {
+    logger.debug("Got message from MQTT topic", fromTopic, ":", message);
     channel.send(message.toString());
   });
 
-  const consuming = done.promise.then(
-    () =>
-      new Promise((resolve) =>
-        client.end(false, {}, () => resolve())
-      ) as Promise<void>
-  );
+  const consuming = done.promise
+    .then(
+      () =>
+        new Promise((resolve) =>
+          client.unsubscribe(
+            typeof topic !== "string" && !Array.isArray(topic)
+              ? Object.keys(topic)
+              : topic,
+            {},
+            () => resolve()
+          )
+        ) as Promise<void>
+    )
+    .then(
+      () =>
+        new Promise((resolve) =>
+          client.end(false, {}, () => resolve())
+        ) as Promise<void>
+    );
 
   // Assemble the event channel.
   return [

@@ -5,10 +5,11 @@
   "main": "src/index.ts",
   "scripts": {
     "start-rabbitmq": "docker start cdp-rabbitmq || docker run --rm -p 5672:5672 --name cdp-rabbitmq -d rabbitmq:3-alpine",
+    "start-emqx": "docker start cdp-emqx || docker run --rm -p 1883:1883 --name cdp-emqx -d emqx/emqx:4.3.16",
     "start-redis": "docker start cdp-redis || docker run --rm -p 6379:6379 --name cdp-redis -d redis:7-alpine",
-    "pretest": "npm run start-redis && npm run start-rabbitmq",
+    "pretest": "npm run start-redis && npm run start-emqx && npm run start-rabbitmq",
     "test": "jest -i --coverage",
-    "posttest": "docker stop cdp-redis cdp-rabbitmq",
+    "posttest": "docker stop cdp-redis cdp-emqx cdp-rabbitmq",
     "check": "jest -i -t @standalone && eslint . --ext .ts && tsc",
     "build": "esbuild src/index.ts --bundle --minify --platform=node --target=node16 --outdir=build",
     "check-and-build": "npm run check && npm run build"
