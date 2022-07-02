@@ -1,3 +1,4 @@
+import { EventEmitter } from "events";
 import Koa from "koa";
 import client from "prom-client";
 import { match, P } from "ts-pattern";
@@ -73,27 +74,36 @@ export const deadEvents = new client.Gauge({
 });
 
 /**
+ * Boxed boolean that emits 'on' events when switching from `false` to
+ * `true`, and 'off' events for the `true` to `false` transition.
+ */
+class BackpressureSignal extends EventEmitter {
+  #state = false;
+
+  status() {
+    return this.#state;
+  }
+
+  update(v: boolean) {
+    const previous = this.#state;
+    this.#state = v;
+    if (v && !previous) {
+      logger.info("Pipeline is signalling backpressure");
+      this.emit("on");
+    } else if (!v && previous) {
+      logger.info("Pipeline stopped signalling backpressure");
+      this.emit("off");
+    }
+    return this;
+  }
+}
+
+/**
  * A global, boxed boolean value that gets updated according to a set
  * of tracked metrics. The value indicates whether input forms should
  * pause ingestion (true), or ingest freely (false).
  */
-export const backpressure = (() => {
-  let state = false;
-  return {
-    status() {
-      return state;
-    },
-    update(v: boolean) {
-      if (v && !state) {
-        logger.info("Pipeline is signalling backpressure");
-      } else if (!v && state) {
-        logger.info("Pipeline stopped signalling backpressure");
-      }
-      state = v;
-      return this;
-    },
-  };
-})();
+export const backpressure = new BackpressureSignal();
 
 /**
  * Tracks the status of the backpressure global flag.

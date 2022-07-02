@@ -15,7 +15,7 @@ import {
 } from "../event";
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
-import { check, resolveAfter, makeFuse } from "../utils";
+import { check, makeFuse } from "../utils";
 
 /**
  * A logger instance namespaced to this module.
@@ -23,13 +23,13 @@ import { check, resolveAfter, makeFuse } from "../utils";
 const logger = makeLogger("input/amqp");
 
 /**
- * Options for this input form.
+ * Extended connection options.
  */
-export interface AMQPInputOptions {
+interface ExtendedAMQPInputOptions {
   url: string;
-  exchange: {
-    name: string;
-    type: "direct" | "fanout" | "topic";
+  exchange?: {
+    name?: string;
+    type?: "direct" | "fanout" | "topic";
     durable?: boolean | "true" | "false";
     "auto-delete"?: boolean | "true" | "false";
   };
@@ -48,67 +48,81 @@ export interface AMQPInputOptions {
 }
 
 /**
+ * Options for this input form.
+ */
+export type AMQPInputOptions = string | ExtendedAMQPInputOptions;
+
+/**
  * An ajv schema for the options.
  */
 export const optionsSchema = {
-  type: "object",
-  properties: {
-    url: { type: "string", pattern: "^amqps?://.*$" },
-    exchange: {
+  anyOf: [
+    { type: "string", pattern: "^amqps?://.*$" },
+    {
       type: "object",
       properties: {
-        name: { type: "string", minLength: 1 },
-        type: { enum: ["direct", "fanout", "topic"] },
-        durable: { anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }] },
-        "auto-delete": {
-          anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }],
+        url: { type: "string", pattern: "^amqps?://.*$" },
+        exchange: {
+          type: "object",
+          properties: {
+            name: { type: "string", minLength: 1 },
+            type: { enum: ["direct", "fanout", "topic"] },
+            durable: {
+              anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }],
+            },
+            "auto-delete": {
+              anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }],
+            },
+          },
+          additionalProperties: false,
+          required: [],
         },
+        "binding-pattern": { type: "string" },
+        queue: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            durable: {
+              anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }],
+            },
+            "auto-delete": {
+              anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }],
+            },
+            "message-ttl": {
+              anyOf: [
+                { type: "integer", minimum: 0, maximum: 4294967295 },
+                { type: "string", pattern: "^[0-9]+$" },
+              ],
+            },
+            expires: {
+              anyOf: [
+                { type: "integer", minimum: 1, maximum: 4294967295 },
+                { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
+              ],
+            },
+            "dead-letter-exchange": { type: "string", minLength: 1 },
+            "max-length": {
+              anyOf: [
+                { type: "integer", minimum: 1 },
+                { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
+              ],
+            },
+            "max-priority": {
+              anyOf: [
+                { type: "integer", minimum: 0, maximum: 255 },
+                { type: "string", pattern: "^[0-9]+$" },
+              ],
+            },
+          },
+          additionalProperties: false,
+          required: [],
+        },
+        wrap: wrapDirectiveSchema,
       },
       additionalProperties: false,
-      required: ["name", "type"],
+      required: ["url"],
     },
-    "binding-pattern": { type: "string" },
-    queue: {
-      type: "object",
-      properties: {
-        name: { type: "string" },
-        durable: { anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }] },
-        "auto-delete": {
-          anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }],
-        },
-        "message-ttl": {
-          anyOf: [
-            { type: "integer", minimum: 0, maximum: 4294967295 },
-            { type: "string", pattern: "^[0-9]+$" },
-          ],
-        },
-        expires: {
-          anyOf: [
-            { type: "integer", minimum: 1, maximum: 4294967295 },
-            { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
-          ],
-        },
-        "dead-letter-exchange": { type: "string", minLength: 1 },
-        "max-length": {
-          anyOf: [
-            { type: "integer", minimum: 1 },
-            { type: "string", pattern: "^[0-9]*[1-9][0-9]*$" },
-          ],
-        },
-        "max-priority": {
-          anyOf: [
-            { type: "integer", minimum: 0, maximum: 255 },
-            { type: "string", pattern: "^[0-9]+$" },
-          ],
-        },
-      },
-      additionalProperties: false,
-      required: [],
-    },
-    wrap: wrapDirectiveSchema,
-  },
-  additionalProperties: false,
-  required: ["url", "exchange"],
+  ],
 };
 
 /**
@@ -147,9 +161,10 @@ export const validate = (options: AMQPInputOptions): void => {
 };
 
 /**
- * Milliseconds to wait after a channel.recover().
+ * Default assertion values for the AMQP exchange.
  */
-const MESSAGE_RECOVERY_INTERVAL = 5000;
+const DEFAULT_EXCHANGE_NAME = "cdp";
+const DEFAULT_EXCHANGE_TYPE = "topic";
 
 /**
  * Creates an input channel based on data received from an AMQP
@@ -159,8 +174,8 @@ const MESSAGE_RECOVERY_INTERVAL = 5000;
  * input.
  * @param pipelineSignature The signature of the pipeline that will
  * use this input.
- * @param options The AMQP connection options to configure the input
- * channel.
+ * @param variantOptions The AMQP connection options to configure the
+ * input channel.
  * @returns A channel that receives data from an AMQP broker and
  * forwards parsed events, and a promise that resolves when the input
  * ends for any reason.
@@ -168,10 +183,18 @@ const MESSAGE_RECOVERY_INTERVAL = 5000;
 export const make = (
   pipelineName: string,
   pipelineSignature: string,
-  options: AMQPInputOptions
+  variantOptions: AMQPInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
-  const parse = chooseParser(options.wrap);
-  const wrapper = makeWrapper(options.wrap);
+  const options: ExtendedAMQPInputOptions =
+    typeof variantOptions === "string"
+      ? { url: variantOptions }
+      : variantOptions;
+  const parse = chooseParser(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
+  const wrapper = makeWrapper(
+    (typeof options === "string" ? {} : options)?.wrap
+  );
   const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
 
   const channel = flatMap(async (message: string) => {
@@ -194,17 +217,17 @@ export const make = (
       ch.on("close", () => done.trigger());
       ch.on("error", () => done.trigger());
       const { exchange } = await ch.assertExchange(
-        options.exchange.name,
-        options.exchange.type,
+        options.exchange?.name ?? DEFAULT_EXCHANGE_NAME,
+        options.exchange?.type ?? DEFAULT_EXCHANGE_TYPE,
         {
           durable:
-            typeof options.exchange.durable === "string"
-              ? options.exchange.durable === "true"
-              : options.exchange.durable ?? true,
+            typeof options.exchange?.durable === "string"
+              ? options.exchange?.durable === "true"
+              : options.exchange?.durable ?? true,
           autoDelete:
-            typeof options.exchange["auto-delete"] === "string"
-              ? options.exchange["auto-delete"] === "true"
-              : options.exchange["auto-delete"] ?? false,
+            typeof options.exchange?.["auto-delete"] === "string"
+              ? options.exchange?.["auto-delete"] === "true"
+              : options.exchange?.["auto-delete"] ?? false,
         }
       );
       const { queue } = await ch.assertQueue(options.queue?.name ?? "", {
@@ -256,10 +279,11 @@ export const make = (
         queue,
         exchange,
         options["binding-pattern"] ??
-          { direct: "cdp", fanout: "", topic: "#" }[options.exchange.type]
+          { direct: "cdp", fanout: "", topic: "#" }[
+            options.exchange?.type ?? DEFAULT_EXCHANGE_TYPE
+          ]
       );
 
-      let scheduleRecovery = false;
       const { consumerTag } = await ch.consume(queue, (message) => {
         if (message === null) {
           return;
@@ -268,23 +292,23 @@ export const make = (
           logger.debug("Got message from amqp broker", message);
           channel.send(message.content.toString());
           ch.ack(message);
-        } else {
-          scheduleRecovery = true;
         }
       });
-      await Promise.race([
-        done.promise,
-        (async () => {
-          while (!done.value()) {
-            if (scheduleRecovery) {
-              await ch.recover();
-              scheduleRecovery = false;
-            }
-            await resolveAfter(MESSAGE_RECOVERY_INTERVAL);
-          }
-        })(),
-      ]);
-      await ch.cancel(consumerTag);
+      let recoveryChain = Promise.resolve();
+      backpressure.on("off", () => {
+        recoveryChain = recoveryChain.then(() =>
+          ch.recover().then(
+            () => {
+              // Disregard the return value of ch.recover().
+            },
+            (err) =>
+              logger.warn(`Couldn't recover messages from broker: ${err}`)
+          )
+        );
+      });
+      await done.promise;
+      await recoveryChain;
+      await await ch.cancel(consumerTag);
 
       await ch.close();
     } finally {

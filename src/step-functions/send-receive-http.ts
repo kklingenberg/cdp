@@ -79,6 +79,7 @@ export const validate = (
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The options that indicate how to send events to the
  * remote HTTP endpoint.
  * @returns A channel that uses a remote HTTP endpoint to transform
@@ -87,6 +88,7 @@ export const validate = (
 export const make = async (
   pipelineName: string,
   pipelineSignature: string,
+  stepName: string,
   options: SendReceiveHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
@@ -112,7 +114,7 @@ export const make = async (
       jqChannel
     );
   } else {
-    const queue = new AsyncQueue<Event[]>("step.<?>.send-receive-http");
+    const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-receive-http`);
     return flatMap(
       (events: Event[]) =>
         sendReceiveEvents(

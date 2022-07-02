@@ -23,7 +23,7 @@ test("@standalone Send-receive-http works as expected", async () => {
   // Arrange
   const target = "http://nothing";
   const method = "POST";
-  const channel = await make("irrelevant", "irrelevant", target);
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", target);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
     await makeEvent("a", "hello", trace),
@@ -52,7 +52,7 @@ test("@standalone Send-receive-http works when using jq as intermediary", async 
   // Arrange
   const target = "http://nothing";
   const method = "PATCH";
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     target,
     method,
     "jq-expr": `[.[] | . * {n: "changed"}]`,

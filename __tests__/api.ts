@@ -29,7 +29,7 @@ test("@standalone Pipeline template construction works normally", () => {
     name: "Test",
     input: { stdin: { wrap: { name: "lorem.ipsum", raw: true } } },
     steps: {
-      a: { reduce: { "send-stdout": {} } },
+      a: { reduce: { "send-http": "http://non-existent.org/events" } },
       b: { flatmap: { "keep-when": {} } },
       c: {
         after: ["a", "b"],

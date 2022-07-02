@@ -64,12 +64,16 @@ export const validate = (
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The jq program that transforms events.
  * @returns A channel that transforms events via jq.
  */
 export const make = async (
   pipelineName: string,
   pipelineSignature: string,
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  stepName: string,
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   options: SendReceiveJqFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const program = typeof options === "string" ? options : options["jq-expr"];

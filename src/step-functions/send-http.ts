@@ -70,6 +70,7 @@ export const validate = (): void => {
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The options that indicate how to send events to the
  * remote HTTP endpoint.
  * @returns A channel that forwards events via HTTP.
@@ -79,6 +80,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   options: SendHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
@@ -113,7 +115,9 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
   } else {
     const accumulatingChannel: Channel<Event[], never> = drain(
-      new AsyncQueue<Event[]>("step.<?>.send-http.accumulating").asChannel(),
+      new AsyncQueue<Event[]>(
+        `step.${stepName}.send-http.accumulating`
+      ).asChannel(),
       async (events: Event[]) => {
         requests[i++] = sendEvents(events, target, method, headers);
         if (i === concurrent) {
@@ -128,7 +132,7 @@ export const make = async (
     forwarder = accumulatingChannel.send.bind(accumulatingChannel);
     closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
-  const queue = new AsyncQueue<Event[]>("step.<?>.send-http.forward");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-http.forward`);
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

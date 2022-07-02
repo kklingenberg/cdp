@@ -75,6 +75,7 @@ const deduplicate = async (
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The options that indicate how to deduplicate
  * events.
  * @returns A channel that removes event duplicates.
@@ -84,9 +85,10 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   options: DeduplicateFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
-  const queue = new AsyncQueue<Event[]>("step.<?>.deduplicate");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.deduplicate`);
   const key = [
     options?.["consider-name"] ?? true ? "1" : "0",
     options?.["consider-data"] ?? true ? "1" : "0",

@@ -20,3 +20,12 @@ steps:
             (.[].t | map(.p) | join(" --> ")),
             ")"
           ] | join("")
+
+  forward:
+    after:
+      - debug
+    flatmap:
+      send-mqtt:
+        url: mqtt://emqx:1883
+        topic: cdp/seventh/from-sixth
+        qos: 2

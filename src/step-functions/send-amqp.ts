@@ -12,13 +12,13 @@ import { makeChannel } from "../io/jq";
 const logger = makeLogger("step-functions/send-amqp");
 
 /**
- * Options for this function.
+ * Extended options for this function.
  */
-export interface SendAMQPFunctionOptions {
+interface ExtendedSendAMQPFunctionOptions {
   url: string;
-  exchange: {
-    name: string;
-    type: "direct" | "fanout" | "topic";
+  exchange?: {
+    name?: string;
+    type?: "direct" | "fanout" | "topic";
     durable?: boolean | "true" | "false";
     "auto-delete"?: boolean | "true" | "false";
   };
@@ -28,6 +28,11 @@ export interface SendAMQPFunctionOptions {
   persistent?: boolean | "true" | "false";
   "jq-expr"?: string;
 }
+
+/**
+ * Options for this function.
+ */
+export type SendAMQPFunctionOptions = string | ExtendedSendAMQPFunctionOptions;
 
 /**
  * An ajv schema for the options.
@@ -96,13 +101,20 @@ export const validate = (
 };
 
 /**
+ * Default assertion values for the AMQP exchange.
+ */
+const DEFAULT_EXCHANGE_NAME = "cdp";
+const DEFAULT_EXCHANGE_TYPE = "topic";
+
+/**
  * Function that sends events to an AMQP broker, and forwards the same
  * events to the rest of the pipeline unmodified.
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
- * @param options The options that indicate how to connect and send
- * events to the AMQP broker.
+ * @param stepName The name of the step this function belongs to.
+ * @param variantOptions The options that indicate how to connect and
+ * send events to the AMQP broker.
  * @returns A channel that forwards events to an AMQP broker.
  */
 export const make = async (
@@ -110,11 +122,18 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  options: SendAMQPFunctionOptions
+  stepName: string,
+  variantOptions: SendAMQPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
+  const options: ExtendedSendAMQPFunctionOptions =
+    typeof variantOptions === "string"
+      ? { url: variantOptions }
+      : variantOptions;
   const routingKey =
     options["routing-key"] ??
-    { direct: "cdp", fanout: "", topic: "cdp" }[options.exchange.type];
+    { direct: "cdp", fanout: "", topic: "cdp" }[
+      options.exchange?.type ?? DEFAULT_EXCHANGE_TYPE
+    ];
   const publishOptions = {
     ...(typeof options.expiration !== "undefined"
       ? {
@@ -146,17 +165,17 @@ export const make = async (
   const ch = await conn.createChannel();
   ch.on("error", (err) => logger.error(`Error on AMQP channel: ${err}`));
   const { exchange } = await ch.assertExchange(
-    options.exchange.name,
-    options.exchange.type,
+    options.exchange?.name ?? DEFAULT_EXCHANGE_NAME,
+    options.exchange?.type ?? DEFAULT_EXCHANGE_TYPE,
     {
       durable:
-        typeof options.exchange.durable === "string"
-          ? options.exchange.durable === "true"
-          : options.exchange.durable ?? true,
+        typeof options.exchange?.durable === "string"
+          ? options.exchange?.durable === "true"
+          : options.exchange?.durable ?? true,
       autoDelete:
-        typeof options.exchange["auto-delete"] === "string"
-          ? options.exchange["auto-delete"] === "true"
-          : options.exchange["auto-delete"] ?? false,
+        typeof options.exchange?.["auto-delete"] === "string"
+          ? options.exchange?.["auto-delete"] === "true"
+          : options.exchange?.["auto-delete"] ?? false,
     }
   );
   let forwarder: (events: Event[]) => void;
@@ -168,9 +187,12 @@ export const make = async (
         const flushed = ch.publish(
           exchange,
           routingKey,
-          Buffer.from(JSON.stringify(message)),
+          Buffer.from(
+            typeof message === "string" ? message : JSON.stringify(message)
+          ),
           {
-            contentType: "application/json",
+            contentType:
+              typeof message === "string" ? "text/plain" : "application/json",
             timestamp: Math.trunc(new Date().getTime() / 1000),
             ...publishOptions,
           }
@@ -190,7 +212,9 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
   } else {
     const passThroughChannel: Channel<Event[], never> = drain(
-      new AsyncQueue<Event[]>("step.<?>.send-redis.pass-through").asChannel(),
+      new AsyncQueue<Event[]>(
+        `step.${stepName}.send-amqp.pass-through`
+      ).asChannel(),
       async (events: Event[]) => {
         const flushed = ch.publish(
           exchange,
@@ -218,7 +242,7 @@ export const make = async (
     forwarder = passThroughChannel.send.bind(passThroughChannel);
     closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>("step.<?>.send-amqp.forward");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-amqp.forward`);
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

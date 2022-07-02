@@ -8,7 +8,7 @@ composition available.
 The example is interactive. To run it, use:
 
 ```bash
-docker compose up -d redis rabbitmq
+docker compose up -d redis emqx rabbitmq
 sleep 5 # or wait a while for services to be ready
 docker compose up
 ```
@@ -22,7 +22,7 @@ curl --data-binary "@test-events.ndjson" "http://localhost:8000/events"
 
 Logs of interest will be visible on the first terminal, and they will
 refer to four instances of CDP: `first`, `second`, `third`, `fourth`,
-`fifth` and `sixth` (the name of the respective services in
+`fifth`, `sixth` and `seventh` (the name of the respective services in
 `docker-compose.yml`).
 
 To clean up, cancel the process in the first terminal with Ctrl-C and
@@ -36,13 +36,14 @@ docker compose down -v
 
 The example shows four pipelines that take input from an [HTTP
 input](/../../#http), [`tail` input](/../../#tail), [`poll`
-input](/../../#poll), [`redis` input](/../../#redis) and [`amqp`
-input](/../../#amqp) and execute some forwarding steps with the
-[`send-http`](/../../#send-http), [`send-file`](/../../#send-file),
+input](/../../#poll), [`redis` input](/../../#redis), [`amqp`
+input](/../../#amqp) and [`mqtt` input](/../../#mqtt) and execute some
+forwarding steps with the [`send-http`](/../../#send-http),
+[`send-file`](/../../#send-file),
 [`expose-http`](/../../#expose-http),
-[`send-redis`](/../../#send-redis) and
-[`send-amqp`](/../../#send-amqp) functions. Also, events are logged in
-each step showing the pipelines they've been in.
+[`send-redis`](/../../#send-redis), [`send-amqp`](/../../#send-amqp)
+and [`send-mqtt`](/../../#send-mqtt) functions. Also, events are
+logged in each step showing the pipelines they've been in.
 
 Worth noting is that the `second` and `fourth` services (and pipeline
 files) use _environment variable interpolation_, which is enabled
@@ -70,4 +71,7 @@ The pipeline files are named after the docker compose services:
   receives events from a redis PSUBSCRIBE subscription and forwards
   them to the `sixth` one via AMQP publishing.
 - [`pipline-sixth.yaml`](pipeline-sixth.yaml) is the pipeline that
-  receives events from an AMQP subscription.
+  receives events from an AMQP subscription and forwards them to the
+  `seventh` one via MQTT publishing.
+- [`pipeline-seventh.yaml`](pipeline-seventh.yaml) is the pipeline
+  that receives events from a MQTT subscription.

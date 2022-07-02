@@ -4,7 +4,7 @@ import { consume } from "../test-utils";
 
 test("@standalone Deduplicate works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", null);
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", null);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
     await makeEvent("a", 3.14, trace),
@@ -28,7 +28,7 @@ test("@standalone Deduplicate works as expected", async () => {
 
 test("@standalone Deduplicate can consider specific parts of events", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     "consider-name": false,
     "consider-data": true,
     "consider-trace": false,

@@ -1,0 +1,176 @@
+import { IClientOptions, connect } from "mqtt";
+import { AsyncQueue, Channel, flatMap, drain } from "../async-queue";
+import { Event } from "../event";
+import { makeLogger } from "../log";
+import { makeChannel } from "../io/jq";
+
+/**
+ * A logger instance namespaced to this module.
+ */
+const logger = makeLogger("step-functions/send-mqtt");
+
+/**
+ * Options for this function.
+ */
+export type SendMQTTFunctionOptions =
+  | string
+  | {
+      url: string;
+      options?: IClientOptions;
+      topic?: string;
+      qos?: 0 | 1 | 2;
+      "jq-expr"?: string;
+    };
+
+/**
+ * An ajv schema for the options.
+ */
+export const optionsSchema = {
+  anyOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        url: { type: "string", minLength: 1 },
+        options: { type: "object" },
+        topic: { type: "string", minLength: 1 },
+        qos: { enum: [0, 1, 2] },
+        "jq-expr": { type: "string", minLength: 1 },
+      },
+      additionalProperties: false,
+      required: ["url"],
+    },
+  ],
+};
+
+/**
+ * Validate send-mqtt options, after they've been checked by the ajv
+ * schema.
+ *
+ * @param name The name of the step this function belongs to.
+ * @param options The options to validate.
+ */
+export const validate = (): void => {
+  // TODO: validate mqtt connection options
+};
+
+/**
+ * Default topic to publish to, when no topic is specified.
+ */
+const defaultTopic = (pipelineName: string, stepName: string) =>
+  `cdp/${pipelineName}/${stepName}`;
+
+/**
+ * Function that sends events to a MQTT broker, and forwards the same
+ * events to the rest of the pipeline unmodified.
+ *
+ * @param pipelineName The name of the pipeline.
+ * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
+ * @param options The options that indicate how to connect and send
+ * events to the MQTT broker.
+ * @returns A channel that forwards events to a MQTT broker.
+ */
+export const make = async (
+  pipelineName: string,
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  pipelineSignature: string,
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
+  options: SendMQTTFunctionOptions
+): Promise<Channel<Event[], Event>> => {
+  const url = typeof options === "string" ? options : options.url;
+  const topic =
+    typeof options === "string" || typeof options.topic === "undefined"
+      ? defaultTopic(pipelineName, stepName)
+      : options.topic;
+  const qos =
+    typeof options === "string" || typeof options.qos === "undefined"
+      ? 0
+      : options.qos;
+  const client =
+    typeof options === "string" || typeof options.options === "undefined"
+      ? connect(url, {})
+      : connect(url, options.options);
+  client.on("error", (err) =>
+    logger.error(`MQTT client notified an error: ${err}`)
+  );
+
+  let forwarder: (events: Event[]) => void;
+  let closeExternal: () => Promise<void>;
+  if (typeof options !== "string" && typeof options["jq-expr"] === "string") {
+    const jqChannel: Channel<Event[], never> = drain(
+      await makeChannel(options["jq-expr"]),
+      async (message: unknown) => {
+        await (new Promise((resolve) =>
+          client.publish(
+            topic,
+            typeof message === "string" ? message : JSON.stringify(message),
+            {
+              qos,
+              properties: {
+                contentType:
+                  typeof message === "string"
+                    ? "text/plain"
+                    : "application/json",
+              },
+            },
+            (err) => {
+              if (err) {
+                logger.warn(
+                  `MQTT client notified an error while publishing: ${err}`
+                );
+              }
+              resolve();
+            }
+          )
+        ) as Promise<void>);
+      }
+    );
+    forwarder = jqChannel.send.bind(jqChannel);
+    closeExternal = jqChannel.close.bind(jqChannel);
+  } else {
+    const passThroughChannel: Channel<Event[], never> = drain(
+      new AsyncQueue<Event[]>(
+        `step.${stepName}.send-mqtt.pass-through`
+      ).asChannel(),
+      async (events: Event[]) => {
+        await (new Promise((resolve) =>
+          client.publish(
+            topic,
+            events.map((e) => JSON.stringify(e)).join("\n") + "\n",
+            {
+              qos,
+              properties: { contentType: "application/x-ndjson" },
+            },
+            (err) => {
+              if (err) {
+                logger.warn(
+                  `MQTT client notified an error while publishing: ${err}`
+                );
+              }
+              resolve();
+            }
+          )
+        ) as Promise<void>);
+      }
+    );
+    forwarder = passThroughChannel.send.bind(passThroughChannel);
+    closeExternal = passThroughChannel.close.bind(passThroughChannel);
+  }
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-mqtt.forward`);
+  const forwardingChannel = flatMap(async (events: Event[]) => {
+    forwarder(events);
+    return events;
+  }, queue.asChannel());
+  return {
+    ...forwardingChannel,
+    close: async () => {
+      await forwardingChannel.close();
+      await closeExternal();
+      await (new Promise((resolve) =>
+        client.end(false, {}, () => resolve())
+      ) as Promise<void>);
+    },
+  };
+};

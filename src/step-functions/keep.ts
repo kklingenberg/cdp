@@ -72,6 +72,7 @@ const toInteger = (v: number | string): number =>
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The options that indicate the maximum amount of
  * events to select.
  * @returns A channel that selects events.
@@ -81,6 +82,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   options: KeepFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const quantity =
@@ -93,7 +95,7 @@ export const make = async (
     typeof options === "string" ||
     typeof options === "number" ||
     "first" in options;
-  const queue = new AsyncQueue<Event[]>("step.<?>.keep");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.keep`);
   return flatMap(
     (events: Event[]) =>
       Promise.resolve(

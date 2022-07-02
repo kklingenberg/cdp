@@ -4,7 +4,9 @@ import { consume } from "../test-utils";
 
 test("@standalone Keep-when works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", { type: "object" });
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+    type: "object",
+  });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
     await makeEvent("not-an-object", 1, trace),

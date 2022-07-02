@@ -27,7 +27,7 @@ test("@amqp Send-amqp works as expected on direct exchanges", async () => {
   // Arrange
   const receivedEvents: string[] = [];
   const conn = await makeConsumer("test1.output", "direct", receivedEvents);
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     url: brokerUrl,
     exchange: {
       name: "test1.output",
@@ -58,7 +58,7 @@ test("@amqp Send-amqp works as expected on fanout exchanges", async () => {
   // Arrange
   const receivedEvents: string[] = [];
   const conn = await makeConsumer("test2.output", "fanout", receivedEvents);
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     url: brokerUrl,
     exchange: {
       name: "test2.output",
@@ -89,7 +89,7 @@ test("@amqp Send-amqp works as expected on topic exchanges", async () => {
   // Arrange
   const receivedEvents: string[] = [];
   const conn = await makeConsumer("test3.output", "topic", receivedEvents);
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     url: brokerUrl,
     exchange: {
       name: "test3.output",
@@ -120,7 +120,7 @@ test("@amqp Send-amqp works as expected when using jq filters", async () => {
   // Arrange
   const receivedEvents: string[] = [];
   const conn = await makeConsumer("test4.output", "topic", receivedEvents);
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     url: brokerUrl,
     exchange: {
       name: "test4.output",
