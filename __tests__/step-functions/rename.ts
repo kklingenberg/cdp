@@ -4,7 +4,7 @@ import { consume } from "../test-utils";
 
 test("@standalone Renaming with replacement works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     replace: "replaced",
   });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
@@ -31,7 +31,7 @@ test("@standalone Renaming with replacement works as expected", async () => {
 
 test("@standalone Renaming with prepend works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     prepend: "prefix.",
   });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
@@ -58,7 +58,7 @@ test("@standalone Renaming with prepend works as expected", async () => {
 
 test("@standalone Renaming with append works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     append: ".suffix",
   });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
@@ -85,7 +85,7 @@ test("@standalone Renaming with append works as expected", async () => {
 
 test("@standalone Renaming with prepend and append works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     prepend: "prefix.",
     append: ".suffix",
   });

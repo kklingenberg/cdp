@@ -149,6 +149,7 @@ const makeGenericResponse = async (
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The options that indicate how to expose events using
  * HTTP.
  * @returns A channel that exposes events via HTTP.
@@ -158,6 +159,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   options: ExposeHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const endpoint = options.endpoint.endsWith("/")
@@ -202,7 +204,9 @@ export const make = async (
     );
   } else {
     responsesChannel = drain(
-      new AsyncQueue<Event[]>("step.<?>.expoes-http.accumulating").asChannel(),
+      new AsyncQueue<Event[]>(
+        `step.${stepName}.expoes-http.accumulating`
+      ).asChannel(),
       async (events: Event[]) => {
         const [key, response] = await makeEventWindowResponse(events);
         registerResponse(key, response);
@@ -268,7 +272,7 @@ export const make = async (
   const forwardingChannel = flatMap(async (events: Event[]) => {
     responsesChannel.send(events);
     return events;
-  }, new AsyncQueue<Event[]>("step.<?>.expose-http.forward").asChannel());
+  }, new AsyncQueue<Event[]>(`step.${stepName}.expose-http.forward`).asChannel());
   return {
     ...forwardingChannel,
     close: async () => {

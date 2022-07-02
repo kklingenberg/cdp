@@ -44,6 +44,8 @@ import * as exposeHTTPFunctionModule from "./step-functions/expose-http";
 import { ExposeHTTPFunctionOptions } from "./step-functions/expose-http";
 import * as sendAMQPFunctionModule from "./step-functions/send-amqp";
 import { SendAMQPFunctionOptions } from "./step-functions/send-amqp";
+import * as sendMQTTFunctionModule from "./step-functions/send-mqtt";
+import { SendMQTTFunctionOptions } from "./step-functions/send-mqtt";
 import * as sendRedisFunctionModule from "./step-functions/send-redis";
 import { SendRedisFunctionOptions } from "./step-functions/send-redis";
 import * as sendHTTPFunctionModule from "./step-functions/send-http";
@@ -123,6 +125,7 @@ const stepFunctionModules = {
   "send-file": sendFileFunctionModule,
   "send-http": sendHTTPFunctionModule,
   "send-amqp": sendAMQPFunctionModule,
+  "send-mqtt": sendMQTTFunctionModule,
   "send-redis": sendRedisFunctionModule,
   "expose-http": exposeHTTPFunctionModule,
   "send-receive-jq": sendReceiveJqFunctionModule,
@@ -141,6 +144,7 @@ type StepFunctionTemplate =
   | { "send-file": SendFileFunctionOptions }
   | { "send-http": SendHTTPFunctionOptions }
   | { "send-amqp": SendAMQPFunctionOptions }
+  | { "send-mqtt": SendMQTTFunctionOptions }
   | { "send-redis": SendRedisFunctionOptions }
   | { "expose-http": ExposeHTTPFunctionOptions }
   | { "send-receive-jq": SendReceiveJqFunctionOptions }
@@ -351,7 +355,7 @@ export const runPipeline = async (
     )[0];
     const fn = await stepFunctionModules[
       stepFunctionName as keyof typeof stepFunctionModules
-    ].make(template.name, signature, stepFunctionOptions);
+    ].make(template.name, signature, name, stepFunctionOptions);
     const factory = makeWindowed(options, fn);
     steps.push({
       name,

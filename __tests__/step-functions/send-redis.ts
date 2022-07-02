@@ -10,7 +10,7 @@ test("@redis Send-redis works for single instance, publish", async () => {
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     instance: redisUrl,
     publish: "send-test1",
   });
@@ -38,7 +38,7 @@ test("@redis Send-redis works for single instance, rpush", async () => {
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     instance: redisUrl,
     rpush: "send-test2",
   });
@@ -68,7 +68,7 @@ test("@redis Send-redis works for single instance, lpush", async () => {
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     instance: redisUrl,
     lpush: "send-test3",
   });
@@ -98,7 +98,7 @@ test("@redis Send-redis works in tandem with jq", async () => {
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const channel = await make("irrelevant", "irrelevant", {
+  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
     instance: redisUrl,
     lpush: "send-test4",
     "jq-expr": ".[].d",
@@ -122,5 +122,5 @@ test("@redis Send-redis works in tandem with jq", async () => {
   await client.quit();
   // Assert
   expect(output.map((e) => e.data)).toEqual(["hello", "world"]);
-  expect(brpopResults).toEqual(['"hello"', '"world"']);
+  expect(brpopResults).toEqual(["hello", "world"]);
 });

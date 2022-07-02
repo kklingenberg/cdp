@@ -112,6 +112,7 @@ const DEFAULT_EXCHANGE_TYPE = "topic";
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param variantOptions The options that indicate how to connect and
  * send events to the AMQP broker.
  * @returns A channel that forwards events to an AMQP broker.
@@ -121,6 +122,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   variantOptions: SendAMQPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const options: ExtendedSendAMQPFunctionOptions =
@@ -185,9 +187,12 @@ export const make = async (
         const flushed = ch.publish(
           exchange,
           routingKey,
-          Buffer.from(JSON.stringify(message)),
+          Buffer.from(
+            typeof message === "string" ? message : JSON.stringify(message)
+          ),
           {
-            contentType: "application/json",
+            contentType:
+              typeof message === "string" ? "text/plain" : "application/json",
             timestamp: Math.trunc(new Date().getTime() / 1000),
             ...publishOptions,
           }
@@ -207,7 +212,9 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
   } else {
     const passThroughChannel: Channel<Event[], never> = drain(
-      new AsyncQueue<Event[]>("step.<?>.send-redis.pass-through").asChannel(),
+      new AsyncQueue<Event[]>(
+        `step.${stepName}.send-amqp.pass-through`
+      ).asChannel(),
       async (events: Event[]) => {
         const flushed = ch.publish(
           exchange,
@@ -235,7 +242,7 @@ export const make = async (
     forwarder = passThroughChannel.send.bind(passThroughChannel);
     closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>("step.<?>.send-amqp.forward");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-amqp.forward`);
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

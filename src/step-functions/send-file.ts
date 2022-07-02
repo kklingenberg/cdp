@@ -61,6 +61,7 @@ export const validate = (): void => {
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The options that indicate how to append events to a
  * file.
  * @returns A channel that appends events to a file.
@@ -70,6 +71,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   options: SendFileFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const path = typeof options === "string" ? options : options.path;
@@ -94,7 +96,9 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
   } else {
     const accumulatingChannel: Channel<Event[], never> = drain(
-      new AsyncQueue<Event[]>("step.<?>.send-file.accumulating").asChannel(),
+      new AsyncQueue<Event[]>(
+        `step.${stepName}.send-file.accumulating`
+      ).asChannel(),
       async (events: Event[]) => {
         const output =
           events.map((event) => JSON.stringify(event)).join("\n") + "\n";
@@ -108,7 +112,7 @@ export const make = async (
     forwarder = accumulatingChannel.send.bind(accumulatingChannel);
     closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
-  const queue = new AsyncQueue<Event[]>("step.<?>.send-file.forward");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-file.forward`);
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

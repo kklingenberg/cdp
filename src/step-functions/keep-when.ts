@@ -38,6 +38,7 @@ export const validate = (
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The schema against which the events are matched.
  * @returns A channel that selects events using a schema.
  */
@@ -46,10 +47,11 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   options: KeepWhenFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const matchesSchema = ajv.compile(options);
-  const queue = new AsyncQueue<Event[]>("step.<?>.keep-when");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.keep-when`);
   return flatMap(
     (events: Event[]) =>
       Promise.resolve(events.filter((event) => matchesSchema(event.data))),

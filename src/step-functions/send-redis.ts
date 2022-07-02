@@ -89,7 +89,10 @@ const sendMessage =
     if (typeof options.publish !== "undefined") {
       try {
         for (const message of messages) {
-          await client.publish(options.publish, JSON.stringify(message));
+          await client.publish(
+            options.publish,
+            typeof message === "string" ? message : JSON.stringify(message)
+          );
         }
       } catch (err) {
         logger.warn(`Couldn't publish payload to redis: ${err}`);
@@ -98,7 +101,9 @@ const sendMessage =
       try {
         await client.rpush(
           options.rpush,
-          ...messages.map((message) => JSON.stringify(message))
+          ...messages.map((message) =>
+            typeof message === "string" ? message : JSON.stringify(message)
+          )
         );
       } catch (err) {
         logger.warn(`Couldn't rpush payload to redis: ${err}`);
@@ -107,7 +112,9 @@ const sendMessage =
       try {
         await client.lpush(
           options.lpush,
-          ...messages.map((message) => JSON.stringify(message))
+          ...messages.map((message) =>
+            typeof message === "string" ? message : JSON.stringify(message)
+          )
         );
       } catch (err) {
         logger.warn(`Couldn't lpush payload to redis: ${err}`);
@@ -123,6 +130,7 @@ const sendMessage =
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The options that indicate how to connect and send
  * events to the redis instance.
  * @returns A channel that forwards events to a redis instance.
@@ -132,6 +140,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   options: SendRedisFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const client: RedisConnection = connect(options);
@@ -146,7 +155,9 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
   } else {
     const passThroughChannel: Channel<Event[], never> = drain(
-      new AsyncQueue<Event[]>("step.<?>.send-redis.pass-through").asChannel(),
+      new AsyncQueue<Event[]>(
+        `step.${stepName}.send-redis.pass-through`
+      ).asChannel(),
       async (events: Event[]) => {
         await sendMessage(
           client,
@@ -157,7 +168,7 @@ export const make = async (
     forwarder = passThroughChannel.send.bind(passThroughChannel);
     closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>("step.<?>.send-redis.forward");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-redis.forward`);
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

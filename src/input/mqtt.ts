@@ -159,6 +159,8 @@ export const make = (
       if (err) {
         logger.error(`Error when subscribing to MQTT topic(s): ${err}`);
         done.trigger();
+      } else {
+        logger.debug("MQTT client subscribed successfully");
       }
     });
   });

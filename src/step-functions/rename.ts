@@ -83,6 +83,7 @@ export const validate = (
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The options that indicate how to rename events.
  * @returns A channel that renames its events.
  */
@@ -91,13 +92,14 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   options: RenameFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const makeNewName: (name: string) => string =
     "replace" in options
       ? () => options.replace
       : (name) => (options.prepend ?? "") + name + (options.append ?? "");
-  const queue = new AsyncQueue<Event[]>("step.<?>.rename");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.rename`);
   return flatMap(
     (events: Event[]) =>
       Promise.all(

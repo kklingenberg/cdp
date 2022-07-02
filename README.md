@@ -841,6 +841,44 @@ optional **number** or **string**, the priority set for each message.
 optional **boolean**, **"true"** or **"false"**, whether the message
 should survive broker restarts (provided the queue does too).
 
+**`steps.<name>.(reduce|flatmap).send-amqp.jq-expr`** optional
+**string**, an optional `jq` filter to apply to events before
+publishing them. If this option is used, each distinct value produced
+by the filter is used for a separate publish. If this option is not
+used, each event vector is published wholly, and the content type
+header of the message is forced to `application/x-ndjson`.
+
+#### `send-mqtt`
+
+**`steps.<name>.(reduce|flatmap).send-mqtt`** **string** or
+**object**, a function that always sends forward the events in the
+vectors it receives, unmodified. It also sends those vectors to the
+specified MQTT broker. If given a string, it will be interpreted as a
+URL and all other parameters will be set to their respective defaults.
+
+**`steps.<name>.(reduce|flatmap).send-mqtt.url`** required **string**,
+the URL of the broker to connect to.
+
+**`steps.<name>.(reduce|flatmap).send-mqtt.options`** optional
+**object**, the connection options. Check the
+[MQTT.js](https://github.com/mqttjs/MQTT.js#mqttclientstreambuilder-options)
+library for details.
+
+**`steps.<name>.(reduce|flatmap).send-mqtt.topic`** optional
+**string** the topic to publish messages to. If omitted, the client
+will publish to "cdp/*pipeline name*/*step name*".
+
+**`steps.<name>.(reduce|flatmap).send-mqtt.qos`** optional **0**,
+**1** or **2**, the quality of service to use when publishing
+messages. Defaults to **0**.
+
+**`steps.<name>.(reduce|flatmap).send-mqtt.jq-expr`** optional
+**string**, an optional `jq` filter to apply to events before
+publishing them. If this option is used, each distinct value produced
+by the filter is used for a separate publish. If this option is not
+used, each event vector is published wholly, and the content type
+header of the message is forced to `application/x-ndjson`.
+
 #### `send-redis`
 
 **`steps.<name>.(reduce|flatmap).send-redis`** **object**, a function

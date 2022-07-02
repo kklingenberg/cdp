@@ -44,6 +44,7 @@ export const validate = (): void => {
  *
  * @param pipelineName The name of the pipeline.
  * @param pipelineSignature The signature of the pipeline.
+ * @param stepName The name of the step this function belongs to.
  * @param options The options that indicate how to send events to
  * STDOUT (specifically, they indicate wether to use jq as a
  * transformation step).
@@ -54,6 +55,7 @@ export const make = async (
   pipelineName: string,
   pipelineSignature: string,
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  stepName: string,
   options: SendSTDOUTFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const stdout = getSTDOUT();
@@ -75,7 +77,9 @@ export const make = async (
     closeExternal = jqChannel.close.bind(jqChannel);
   } else {
     const passThroughChannel: Channel<Event[], never> = drain(
-      new AsyncQueue<Event[]>("step.<?>.send-stdout.pass-through").asChannel(),
+      new AsyncQueue<Event[]>(
+        `step.${stepName}.send-stdout.pass-through`
+      ).asChannel(),
       async (events: Event[]) => {
         for (const event of events) {
           const flushed = stdout.write(JSON.stringify(event) + "\n");
@@ -88,7 +92,7 @@ export const make = async (
     forwarder = passThroughChannel.send.bind(passThroughChannel);
     closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>("step.<?>.send-stdout.forward");
+  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-stdout.forward`);
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;
