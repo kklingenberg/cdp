@@ -52,9 +52,20 @@ services:
     command: ["/app/pipeline-sixth.yaml"]
     depends_on:
       - rabbitmq
+      - emqx
+      - seventh
+
+  seventh:
+    <<: *cdp
+    command: ["/app/pipeline-seventh.yaml"]
+    depends_on:
+      - emqx
 
   redis:
     image: redis:7-alpine
+
+  emqx:
+    image: emqx/emqx:4.3.16
 
   rabbitmq:
     image: rabbitmq:3-alpine
