@@ -2,9 +2,9 @@
 
 This project attempts to achieve a building block for complex data
 processing pipelines in the form of a pipeline _executor_, which can
-then bind inputs and outputs with other executors via stdin/stdout or
-HTTP. Data processing tasks can be written inline or be delegated to
-external services.
+then bind inputs and outputs with other executors via stdin/stdout,
+HTTP, Redis, AMQP, or MQTT. Data processing tasks can be written
+inline or be delegated to external services.
 
 ## Overview
 
