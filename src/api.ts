@@ -162,6 +162,7 @@ const stepFunctionTemplateSchema = {
 interface PipelineTemplate {
   name: string;
   input: InputTemplate;
+  "jq-prelude"?: string;
   steps?: {
     [key: string]: {
       after?: string[];
@@ -181,6 +182,7 @@ const pipelineTemplateSchema = {
   properties: {
     name: { type: "string", minLength: 1 },
     input: inputTemplateSchema,
+    "jq-prelude": { type: "string", minLength: 1 },
     steps: {
       type: "object",
       properties: {},
@@ -311,6 +313,11 @@ export const runPipeline = async (
 ): Promise<[Promise<void>, () => void]> => {
   // Setup initialization arguments.
   const signature = await getSignature(template);
+  const inputParameters = {
+    pipelineName: template.name,
+    pipelineSignature: signature,
+    "jq-prelude": template["jq-prelude"],
+  };
   // Zero pipeline metrics.
   pipelineEvents.inc({ flow: "in" }, 0);
   pipelineEvents.inc({ flow: "out" }, 0);
@@ -319,7 +326,7 @@ export const runPipeline = async (
   const [inputName, inputOptions] = Object.entries(template.input)[0];
   const [inputChannel, inputEnded] = inputModules[
     inputName as keyof typeof inputModules
-  ].make(template.name, signature, inputOptions);
+  ].make(inputParameters, inputOptions);
   // Create the pipeline channel.
   const steps: StepDefinition[] = [];
   for (const [name, definition] of Object.entries(template.steps ?? {})) {
@@ -353,9 +360,15 @@ export const runPipeline = async (
     const [stepFunctionName, stepFunctionOptions] = Object.entries(
       definition[functionMode] as StepFunctionTemplate
     )[0];
+    const parameters = {
+      pipelineName: template.name,
+      pipelineSignature: signature,
+      stepName: name,
+      "jq-prelude": template["jq-prelude"],
+    };
     const fn = await stepFunctionModules[
       stepFunctionName as keyof typeof stepFunctionModules
-    ].make(template.name, signature, name, stepFunctionOptions);
+    ].make(parameters, stepFunctionOptions);
     const factory = makeWindowed(options, fn);
     steps.push({
       name,

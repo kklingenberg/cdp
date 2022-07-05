@@ -20,10 +20,10 @@ afterEach(() => {
 
 test("@standalone The tail input form works as expected", async () => {
   // Arrange
-  const [channel] = make("irrelevant", "irrelevant", {
-    path: tmpFilePath,
-    wrap: { name: "test", raw: true },
-  });
+  const [channel] = make(
+    { pipelineName: "irrelevant", pipelineSignature: "irrelevant" },
+    { path: tmpFilePath, wrap: { name: "test", raw: true } }
+  );
   await resolveAfter(100);
   const fd = fs.openSync(tmpFilePath, "a");
   fs.writeSync(fd, "Lorem ipsum\r\n");

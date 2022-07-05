@@ -29,11 +29,17 @@ afterEach((done) => {
 
 const readFile = (path: string): string => readFileSync(path, "utf-8");
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+  stepName: "irrelevant",
+};
+
 test("@standalone Send-file works as expected", async () => {
   expect(fixtures.directory).not.toBeNull();
   const path = join(fixtures.directory as string, "test");
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", path);
+  const channel = await make(testParams, path);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
     await makeEvent("a", "hello", trace),
@@ -56,7 +62,7 @@ test("@standalone Send-file works when using a jq program to preprocess the data
   expect(fixtures.directory).not.toBeNull();
   const path = join(fixtures.directory as string, "test");
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     path,
     "jq-expr": ".[].d",
   });
@@ -82,7 +88,7 @@ test("@standalone Send-file doesn't overwrite file contents", async () => {
   const path = join(fixtures.directory as string, "test");
   writeFileSync(path, "this was here before those 'events' arrived");
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     path,
   });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];

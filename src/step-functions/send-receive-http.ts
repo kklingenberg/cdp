@@ -9,6 +9,7 @@ import {
 import { check } from "../utils";
 import { sendReceiveEvents, sendReceiveThing } from "../io/http-client";
 import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * Options for this function.
@@ -77,18 +78,14 @@ export const validate = (
  * response and interprets it as transformed events, and forwards
  * those events to the pipeline.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to send events to the
  * remote HTTP endpoint.
  * @returns A channel that uses a remote HTTP endpoint to transform
  * events.
  */
 export const make = async (
-  pipelineName: string,
-  pipelineSignature: string,
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: SendReceiveHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
@@ -104,8 +101,8 @@ export const make = async (
       (thing: unknown) =>
         sendReceiveThing(
           thing,
-          pipelineName,
-          pipelineSignature,
+          params.pipelineName,
+          params.pipelineSignature,
           target,
           method,
           headers,
@@ -114,13 +111,15 @@ export const make = async (
       jqChannel
     );
   } else {
-    const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-receive-http`);
+    const queue = new AsyncQueue<Event[]>(
+      `step.${params.stepName}.send-receive-http`
+    );
     return flatMap(
       (events: Event[]) =>
         sendReceiveEvents(
           events,
-          pipelineName,
-          pipelineSignature,
+          params.pipelineName,
+          params.pipelineSignature,
           target,
           method,
           headers,

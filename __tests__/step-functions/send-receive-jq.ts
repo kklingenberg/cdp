@@ -7,9 +7,12 @@ test("@standalone Send-receive-jq works as expected", async () => {
   // Arrange
   const pipelineName = "test";
   const pipelineSignature = "signature";
-  const channel = await make(pipelineName, pipelineSignature, "irrelevant", {
-    "jq-expr": `map(. * {d: "replaced!"})`,
-  });
+  const channel = await make(
+    { pipelineName, pipelineSignature, stepName: "irrelevant" },
+    {
+      "jq-expr": `map(. * {d: "replaced!"})`,
+    }
+  );
   const trace = [{ i: 1, p: pipelineName, h: pipelineSignature }];
   const events = [
     await makeEvent("a", "hello", trace),
@@ -30,9 +33,7 @@ test("@standalone Send-receive-jq will filter out events that are invalid", asyn
   const pipelineName = "test";
   const pipelineSignature = "signature";
   const channel = await make(
-    pipelineName,
-    pipelineSignature,
-    "irrelevant",
+    { pipelineName, pipelineSignature, stepName: "irrelevant" },
     `[.[0] * {n: "invalid name"}] + .[1:]`
   );
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];

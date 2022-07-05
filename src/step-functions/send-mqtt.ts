@@ -3,6 +3,7 @@ import { AsyncQueue, Channel, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
 import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -64,25 +65,19 @@ const defaultTopic = (pipelineName: string, stepName: string) =>
  * Function that sends events to a MQTT broker, and forwards the same
  * events to the rest of the pipeline unmodified.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to connect and send
  * events to the MQTT broker.
  * @returns A channel that forwards events to a MQTT broker.
  */
 export const make = async (
-  pipelineName: string,
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: SendMQTTFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const url = typeof options === "string" ? options : options.url;
   const topic =
     typeof options === "string" || typeof options.topic === "undefined"
-      ? defaultTopic(pipelineName, stepName)
+      ? defaultTopic(params.pipelineName, params.stepName)
       : options.topic;
   const qos =
     typeof options === "string" || typeof options.qos === "undefined"
@@ -132,7 +127,7 @@ export const make = async (
   } else {
     const passThroughChannel: Channel<Event[], never> = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.send-mqtt.pass-through`
+        `step.${params.stepName}.send-mqtt.pass-through`
       ).asChannel(),
       async (events: Event[]) => {
         await (new Promise((resolve) =>
@@ -158,7 +153,9 @@ export const make = async (
     forwarder = passThroughChannel.send.bind(passThroughChannel);
     closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-mqtt.forward`);
+  const queue = new AsyncQueue<Event[]>(
+    `step.${params.stepName}.send-mqtt.forward`
+  );
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

@@ -11,9 +11,14 @@ const testEvents = [
   { n: "baz", d: "bazz" },
 ];
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+};
+
 test("@mqtt The mqtt input form builds a one-way channel", async () => {
   // Arrange
-  const [channel, stopped] = make("irrelevant", "irrelevant", brokerUrl);
+  const [channel, stopped] = make(testParams, brokerUrl);
   // Act
   const sent = channel.send();
   await Promise.race([channel.close(), stopped]);
@@ -24,7 +29,7 @@ test("@mqtt The mqtt input form builds a one-way channel", async () => {
 test("@mqtt The mqtt input works as expected", async () => {
   // Arrange
   const client = connect(brokerUrl, {});
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     url: brokerUrl,
     topic: "test-input/2/+",
   });

@@ -25,9 +25,15 @@ import { resolveAfter } from "../../src/utils";
 import { make } from "../../src/step-functions/send-stdout";
 import { consume } from "../test-utils";
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+  stepName: "irrelevant",
+};
+
 test("@standalone Send-stdout works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", null);
+  const channel = await make(testParams, null);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
     await makeEvent("a", "hello", trace),
@@ -48,7 +54,7 @@ test("@standalone Send-stdout works as expected", async () => {
 
 test("@standalone Send-stdout works when using a jq program to preprocess the data", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     "jq-expr": ".[].d",
   });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];

@@ -94,16 +94,16 @@ export const makeChannel = async <T>(
   const child = spawn(path, ["-cM", "--unbuffered", wrapJqProgram(program)], {
     stdio: ["pipe", "pipe", "inherit"],
   });
-  let onSpawned: (x: null) => void;
+  let onSpawned: () => void;
   let onError: (err: Error) => void;
-  const precondition: Promise<null> = new Promise((resolve, reject) => {
+  const precondition: Promise<void> = new Promise((resolve, reject) => {
     onSpawned = resolve;
     onError = reject;
   });
   child.on("spawn", () => {
     if (typeof child.pid === "number") {
       instances.set(child.pid, child);
-      onSpawned(null);
+      onSpawned();
     } else {
       onError(new Error("jq instance didn't receive a pid"));
     }

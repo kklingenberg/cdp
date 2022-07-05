@@ -5,10 +5,16 @@ import { consume } from "../test-utils";
 
 test("@standalone The http input form works as expected", async () => {
   // Arrange
-  const [channel] = make("irrelevant", "irrelevant", {
-    endpoint: "/events",
-    port: 30001,
-  });
+  const [channel] = make(
+    {
+      pipelineName: "irrelevant",
+      pipelineSignature: "irrelevant",
+    },
+    {
+      endpoint: "/events",
+      port: 30001,
+    }
+  );
   const events = [
     { n: "foo", d: "fooo" },
     { n: "bar", d: "barr" },

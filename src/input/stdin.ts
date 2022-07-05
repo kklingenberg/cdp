@@ -14,6 +14,7 @@ import {
 import { getSTDIN } from "../io/stdio";
 import { makeLogger } from "../log";
 import { check } from "../utils";
+import { PipelineInputParameters } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -58,25 +59,24 @@ export const validate = (options: STDINInputOptions): void => {
  * Creates an input channel based on data coming from STDIN. Returns a
  * pair of [channel, endPromise].
  *
- * @param pipelineName The name of the pipeline that will use this
- * input.
- * @param pipelineSignature The signature of the pipeline that will
- * use this input.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The STDIN options to configure the input channel.
  * @returns A channel that implicitly receives data from STDIN and
  * forwards parsed events, and a promise that resolves when the input
  * ends for any reason.
  */
 export const make = (
-  pipelineName: string,
-  pipelineSignature: string,
+  params: PipelineInputParameters,
   options: STDINInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
   const parse = chooseParser(
     (typeof options === "string" ? {} : options)?.wrap
   );
   const wrapper = makeWrapper(options?.wrap);
-  const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
+  const eventParser = makeNewEventParser(
+    params.pipelineName,
+    params.pipelineSignature
+  );
   const stdin = getSTDIN();
   const rawReceive = parse(stdin);
   let notifyDrained: () => void;

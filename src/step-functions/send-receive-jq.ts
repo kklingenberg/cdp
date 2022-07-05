@@ -12,6 +12,7 @@ import {
 } from "../event";
 import { check } from "../utils";
 import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * Options for this function.
@@ -62,18 +63,12 @@ export const validate = (
 /**
  * Function that transforms events using jq.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The jq program that transforms events.
  * @returns A channel that transforms events via jq.
  */
 export const make = async (
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  stepName: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
+  params: PipelineStepFunctionParameters,
   options: SendReceiveJqFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const program = typeof options === "string" ? options : options["jq-expr"];
@@ -81,7 +76,10 @@ export const make = async (
   const wrapper = makeWrapper(
     (typeof options === "string" ? {} : options).wrap
   );
-  const parser = makeOldEventParser(pipelineName, pipelineSignature);
+  const parser = makeOldEventParser(
+    params.pipelineName,
+    params.pipelineSignature
+  );
   const channel: Channel<Event[], unknown> = await makeChannel(program, parse);
   return parseChannel(
     flatMap(async (d) => [wrapper(d)], channel),

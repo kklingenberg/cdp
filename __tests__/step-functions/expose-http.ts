@@ -4,9 +4,15 @@ import { make } from "../../src/step-functions/expose-http";
 import { resolveAfter } from "../../src/utils";
 import { consume } from "../test-utils";
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+  stepName: "irrelevant",
+};
+
 test("@standalone Expose-http works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     endpoint: "/events",
     port: 30000,
     responses: 2,
@@ -70,7 +76,7 @@ test("@standalone Expose-http works as expected", async () => {
 
 test("@standalone Expose-http can transform responses using a jq filter", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     endpoint: "/events",
     port: 30010,
     responses: 2,

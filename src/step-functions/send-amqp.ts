@@ -5,6 +5,7 @@ import { Event } from "../event";
 import { makeLogger } from "../log";
 import { check } from "../utils";
 import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -110,19 +111,13 @@ const DEFAULT_EXCHANGE_TYPE = "topic";
  * Function that sends events to an AMQP broker, and forwards the same
  * events to the rest of the pipeline unmodified.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param variantOptions The options that indicate how to connect and
  * send events to the AMQP broker.
  * @returns A channel that forwards events to an AMQP broker.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   variantOptions: SendAMQPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const options: ExtendedSendAMQPFunctionOptions =
@@ -213,7 +208,7 @@ export const make = async (
   } else {
     const passThroughChannel: Channel<Event[], never> = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.send-amqp.pass-through`
+        `step.${params.stepName}.send-amqp.pass-through`
       ).asChannel(),
       async (events: Event[]) => {
         const flushed = ch.publish(
@@ -242,7 +237,9 @@ export const make = async (
     forwarder = passThroughChannel.send.bind(passThroughChannel);
     closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-amqp.forward`);
+  const queue = new AsyncQueue<Event[]>(
+    `step.${params.stepName}.send-amqp.forward`
+  );
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

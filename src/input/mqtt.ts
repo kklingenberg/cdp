@@ -16,6 +16,7 @@ import {
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
 import { check, makeFuse } from "../utils";
+import { PipelineInputParameters } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -98,10 +99,7 @@ const DEFAULT_TOPIC = "cdp/#";
 /**
  * Creates an input channel based on data received from a MQTT broker.
  *
- * @param pipelineName The name of the pipeline that will use this
- * input.
- * @param pipelineSignature The signature of the pipeline that will
- * use this input.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The MQTT connection options to configure the input
  * channel.
  * @returns A channel that receives data from a MQTT broker and
@@ -109,8 +107,7 @@ const DEFAULT_TOPIC = "cdp/#";
  * ends for any reason.
  */
 export const make = (
-  pipelineName: string,
-  pipelineSignature: string,
+  params: PipelineInputParameters,
   options: MQTTInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
   const url = typeof options === "string" ? options : options.url;
@@ -124,7 +121,10 @@ export const make = (
   const wrapper = makeWrapper(
     (typeof options === "string" ? {} : options)?.wrap
   );
-  const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
+  const eventParser = makeNewEventParser(
+    params.pipelineName,
+    params.pipelineSignature
+  );
 
   const channel = flatMap(async (message: string) => {
     arrivalTimestamp.update();

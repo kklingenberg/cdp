@@ -9,6 +9,7 @@ import {
   clusterSchema,
   RedisConnection,
 } from "../io/redis";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -128,19 +129,13 @@ const sendMessage =
  * Function that sends events to a redis instance, and forwards the
  * same events to the rest of the pipeline unmodified.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to connect and send
  * events to the redis instance.
  * @returns A channel that forwards events to a redis instance.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: SendRedisFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const client: RedisConnection = connect(options);
@@ -156,7 +151,7 @@ export const make = async (
   } else {
     const passThroughChannel: Channel<Event[], never> = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.send-redis.pass-through`
+        `step.${params.stepName}.send-redis.pass-through`
       ).asChannel(),
       async (events: Event[]) => {
         await sendMessage(
@@ -168,7 +163,9 @@ export const make = async (
     forwarder = passThroughChannel.send.bind(passThroughChannel);
     closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-redis.forward`);
+  const queue = new AsyncQueue<Event[]>(
+    `step.${params.stepName}.send-redis.forward`
+  );
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

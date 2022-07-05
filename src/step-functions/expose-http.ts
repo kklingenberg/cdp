@@ -6,6 +6,7 @@ import { makeLogger } from "../log";
 import { check, getSignature, mergeHeaders } from "../utils";
 import { makeHTTPServer } from "../io/http-server";
 import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -147,19 +148,13 @@ const makeGenericResponse = async (
  * Function that exposes events in an HTTP endpoint, ignores the
  * requests and forwards the events to the pipeline.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to expose events using
  * HTTP.
  * @returns A channel that exposes events via HTTP.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: ExposeHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const endpoint = options.endpoint.endsWith("/")
@@ -205,7 +200,7 @@ export const make = async (
   } else {
     responsesChannel = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.expoes-http.accumulating`
+        `step.${params.stepName}.expoes-http.accumulating`
       ).asChannel(),
       async (events: Event[]) => {
         const [key, response] = await makeEventWindowResponse(events);
@@ -272,7 +267,7 @@ export const make = async (
   const forwardingChannel = flatMap(async (events: Event[]) => {
     responsesChannel.send(events);
     return events;
-  }, new AsyncQueue<Event[]>(`step.${stepName}.expose-http.forward`).asChannel());
+  }, new AsyncQueue<Event[]>(`step.${params.stepName}.expose-http.forward`).asChannel());
   return {
     ...forwardingChannel,
     close: async () => {

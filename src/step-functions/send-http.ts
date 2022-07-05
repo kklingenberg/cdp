@@ -3,6 +3,7 @@ import { HTTP_CLIENT_DEFAULT_CONCURRENCY } from "../conf";
 import { Event } from "../event";
 import { sendEvents, sendThing } from "../io/http-client";
 import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * Options for this function.
@@ -68,19 +69,13 @@ export const validate = (): void => {
  * Function that sends events to a remote HTTP endpoint, ignores the
  * response and forwards the events to the pipeline.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to send events to the
  * remote HTTP endpoint.
  * @returns A channel that forwards events via HTTP.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: SendHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
@@ -116,7 +111,7 @@ export const make = async (
   } else {
     const accumulatingChannel: Channel<Event[], never> = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.send-http.accumulating`
+        `step.${params.stepName}.send-http.accumulating`
       ).asChannel(),
       async (events: Event[]) => {
         requests[i++] = sendEvents(events, target, method, headers);
@@ -132,7 +127,9 @@ export const make = async (
     forwarder = accumulatingChannel.send.bind(accumulatingChannel);
     closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-http.forward`);
+  const queue = new AsyncQueue<Event[]>(
+    `step.${params.stepName}.send-http.forward`
+  );
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

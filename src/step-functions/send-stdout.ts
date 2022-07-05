@@ -2,6 +2,7 @@ import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeChannel } from "../io/jq";
 import { getSTDOUT } from "../io/stdio";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * Options for this function.
@@ -42,20 +43,14 @@ export const validate = (): void => {
  * Function that sends events to STDOUT and forwards them to the
  * pipeline.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to send events to
  * STDOUT (specifically, they indicate wether to use jq as a
  * transformation step).
  * @returns A channel that forwards events to STDOUT.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: SendSTDOUTFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const stdout = getSTDOUT();
@@ -78,7 +73,7 @@ export const make = async (
   } else {
     const passThroughChannel: Channel<Event[], never> = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.send-stdout.pass-through`
+        `step.${params.stepName}.send-stdout.pass-through`
       ).asChannel(),
       async (events: Event[]) => {
         for (const event of events) {
@@ -92,7 +87,9 @@ export const make = async (
     forwarder = passThroughChannel.send.bind(passThroughChannel);
     closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-stdout.forward`);
+  const queue = new AsyncQueue<Event[]>(
+    `step.${params.stepName}.send-stdout.forward`
+  );
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;

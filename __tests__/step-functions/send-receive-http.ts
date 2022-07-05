@@ -19,11 +19,17 @@ import { make } from "../../src/step-functions/send-receive-http";
 import { resolveAfter } from "../../src/utils";
 import { consume } from "../test-utils";
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+  stepName: "irrelevant",
+};
+
 test("@standalone Send-receive-http works as expected", async () => {
   // Arrange
   const target = "http://nothing";
   const method = "POST";
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", target);
+  const channel = await make(testParams, target);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
     await makeEvent("a", "hello", trace),
@@ -52,7 +58,7 @@ test("@standalone Send-receive-http works when using jq as intermediary", async 
   // Arrange
   const target = "http://nothing";
   const method = "PATCH";
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     target,
     method,
     "jq-expr": `[.[] | . * {n: "changed"}]`,

@@ -4,6 +4,7 @@ import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
 import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * Use fs.appendFile as an async function.
@@ -59,19 +60,13 @@ export const validate = (): void => {
  * Function that appends events to a file and forwards them to the
  * pipeline.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to append events to a
  * file.
  * @returns A channel that appends events to a file.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: SendFileFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const path = typeof options === "string" ? options : options.path;
@@ -97,7 +92,7 @@ export const make = async (
   } else {
     const accumulatingChannel: Channel<Event[], never> = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.send-file.accumulating`
+        `step.${params.stepName}.send-file.accumulating`
       ).asChannel(),
       async (events: Event[]) => {
         const output =
@@ -112,7 +107,9 @@ export const make = async (
     forwarder = accumulatingChannel.send.bind(accumulatingChannel);
     closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-file.forward`);
+  const queue = new AsyncQueue<Event[]>(
+    `step.${params.stepName}.send-file.forward`
+  );
   const forwardingChannel = flatMap(async (events: Event[]) => {
     forwarder(events);
     return events;
