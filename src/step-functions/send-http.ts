@@ -94,7 +94,7 @@ export const make = async (
   let i = 0;
   if (typeof options !== "string" && typeof options["jq-expr"] === "string") {
     const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"]),
+      await makeChannel(options["jq-expr"], { prelude: params["jq-prelude"] }),
       async (response: unknown) => {
         requests[i++] = sendThing(response, target, method, headers);
         if (i === concurrent) {

@@ -1055,6 +1055,19 @@ all filters with a
 errors will thus be silently skipped over, so it can be very important
 to always test your `jq` filters in controlled environments.
 
+### `jq-prelude`
+
+Since `jq` is favoured as an outwards-facing filter and most step
+functions support it, it's common to find repeated logic in
+expressions used for various steps. To prevent code duplication, [`jq`
+functions](https://stedolan.github.io/jq/manual/#DefiningFunctions)
+should be used and placed in the top-level `jq-prelude` section. `jq`
+code defined there will be shared between all jq expressions, so it's
+the ideal place to place functions in.
+
+An example of usage can be found in the [stress test
+example](examples/stress-test).
+
 ### Metrics
 
 Any running instance of CDP can expose operation metrics, which can be

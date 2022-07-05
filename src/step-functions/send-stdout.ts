@@ -58,7 +58,7 @@ export const make = async (
   let closeExternal: () => Promise<void>;
   if (options !== null && typeof options["jq-expr"] === "string") {
     const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"]),
+      await makeChannel(options["jq-expr"], { prelude: params["jq-prelude"] }),
       async (result: unknown) => {
         const flushed = stdout.write(
           (typeof result === "string" ? result : JSON.stringify(result)) + "\n"

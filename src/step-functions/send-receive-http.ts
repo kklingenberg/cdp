@@ -95,7 +95,8 @@ export const make = async (
   const wrap = typeof options === "string" ? undefined : options.wrap;
   if (typeof options !== "string" && typeof options["jq-expr"] === "string") {
     const jqChannel: Channel<Event[], unknown> = await makeChannel(
-      options["jq-expr"]
+      options["jq-expr"],
+      { prelude: params["jq-prelude"] }
     );
     return flatMap(
       (thing: unknown) =>

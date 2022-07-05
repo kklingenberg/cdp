@@ -74,7 +74,7 @@ export const make = async (
   let closeExternal: () => Promise<void>;
   if (typeof options === "object" && typeof options["jq-expr"] === "string") {
     const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"]),
+      await makeChannel(options["jq-expr"], { prelude: params["jq-prelude"] }),
       async (result: unknown) => {
         try {
           await appendFile(

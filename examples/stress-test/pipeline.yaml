@@ -9,6 +9,8 @@ name: "Checking divisivility and applying primality heuristics"
 input:
   http: /events
 
+# Define multiplication modulo and exponentiation modulo, since the
+# naive implementations fail for large numbers
 jq-prelude: |-
   def mulmod($a; $b; $m): [$a, $b, 0] | until(
     .[0] == 0;

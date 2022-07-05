@@ -191,7 +191,7 @@ export const make = async (
   let responsesChannel: Channel<Event[], never>;
   if (typeof options["jq-expr"] === "string") {
     responsesChannel = drain(
-      await makeChannel(options["jq-expr"]),
+      await makeChannel(options["jq-expr"], { prelude: params["jq-prelude"] }),
       async (thing: unknown) => {
         const [key, response] = await makeGenericResponse(thing);
         registerResponse(key, response);

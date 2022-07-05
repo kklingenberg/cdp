@@ -69,7 +69,16 @@ export const isHealthy = (): boolean =>
  * Wraps a jq expression so that execution failures don't crash the jq
  * process.
  */
-const wrapJqProgram = (program: string): string => `try (${program})`;
+const wrapJqProgram = (program: string, prelude?: string): string =>
+  `${prelude ?? ""}\ntry (${program})`;
+
+/**
+ * Options used to alter a jq channel's behaviour.
+ */
+interface ChannelOptions {
+  parse?: (stream: Readable, limit?: number) => AsyncGenerator<unknown>;
+  prelude?: string;
+}
 
 /**
  * Establishes a connection to a fresh jq process, communicating with
@@ -83,7 +92,7 @@ const wrapJqProgram = (program: string): string => `try (${program})`;
  */
 export const makeChannel = async <T>(
   program: string,
-  parse?: (stream: Readable, limit?: number) => AsyncGenerator<unknown>
+  options?: ChannelOptions
 ): Promise<Channel<T, unknown>> => {
   const path = getJqPath();
   if (path === null) {
@@ -91,9 +100,13 @@ export const makeChannel = async <T>(
       "jq executable couldn't be found; check your PATH variable"
     );
   }
-  const child = spawn(path, ["-cM", "--unbuffered", wrapJqProgram(program)], {
-    stdio: ["pipe", "pipe", "inherit"],
-  });
+  const child = spawn(
+    path,
+    ["-cM", "--unbuffered", wrapJqProgram(program, options?.prelude)],
+    {
+      stdio: ["pipe", "pipe", "inherit"],
+    }
+  );
   let onSpawned: () => void;
   let onError: (err: Error) => void;
   const precondition: Promise<void> = new Promise((resolve, reject) => {
@@ -112,7 +125,7 @@ export const makeChannel = async <T>(
     onError(err);
   });
   await precondition;
-  const parseStream = parse ?? parseJson;
+  const parseStream = options?.parse ?? parseJson;
   const bufferChannel: Channel<T, T> = new AsyncQueue<T>(
     "io.jq.buffer"
   ).asChannel();

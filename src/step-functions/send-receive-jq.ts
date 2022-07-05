@@ -80,7 +80,10 @@ export const make = async (
     params.pipelineName,
     params.pipelineSignature
   );
-  const channel: Channel<Event[], unknown> = await makeChannel(program, parse);
+  const channel: Channel<Event[], unknown> = await makeChannel(program, {
+    parse,
+    prelude: params["jq-prelude"],
+  });
   return parseChannel(
     flatMap(async (d) => [wrapper(d)], channel),
     parser,

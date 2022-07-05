@@ -143,7 +143,7 @@ export const make = async (
   let closeExternal: () => Promise<void>;
   if (typeof options["jq-expr"] === "string") {
     const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"]),
+      await makeChannel(options["jq-expr"], { prelude: params["jq-prelude"] }),
       sendMessage(client, options)
     );
     forwarder = jqChannel.send.bind(jqChannel);

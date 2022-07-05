@@ -177,7 +177,7 @@ export const make = async (
   let closeExternal: () => Promise<void>;
   if (typeof options["jq-expr"] === "string") {
     const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"]),
+      await makeChannel(options["jq-expr"], { prelude: params["jq-prelude"] }),
       async (message: unknown) => {
         const flushed = ch.publish(
           exchange,
