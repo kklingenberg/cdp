@@ -77,7 +77,8 @@ export const PARSE_BUFFER_SIZE: number =
  */
 export const PATH: string[] = (process.env.PATH ?? "")
   .split(":")
-  .filter((p) => p.length > 0);
+  .filter((p) => p.length > 0)
+  .concat(NODE_ENV === "test" ? ["./stream-jsonnet"] : []);
 
 /**
  * The time to wait after the input drains before closing the

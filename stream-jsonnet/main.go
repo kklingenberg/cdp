@@ -27,7 +27,7 @@ func main() {
 	}
 	input := "input"
 	if len(os.Args) > 3 {
-		tag = os.Args[2]
+		input = os.Args[2]
 	}
 
 	// Check the syntactic correctness of the jsonnet program.
@@ -51,6 +51,7 @@ func main() {
 				// the input or the execution. Skipping this input is
 				// thus compatible with the `try` expression applied
 				// to jq filters.
+				fmt.Fprintln(os.Stderr, err)
 			} else {
 				var compacted bytes.Buffer
 				json.Compact(&compacted, []byte(output))
