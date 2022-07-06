@@ -4,9 +4,7 @@ import { HTTP_CLIENT_DEFAULT_CONCURRENCY } from "../conf";
 import { Event } from "../event";
 import { check } from "../utils";
 import { sendEvents, sendThing } from "../io/http-client";
-import { processor as jqProcessor } from "../io/jq";
-import { processor as jsonnetProcessor } from "../io/jsonnet";
-import { PipelineStepFunctionParameters } from ".";
+import { PipelineStepFunctionParameters, makeProcessorChannel } from ".";
 
 /**
  * Options for this function.
@@ -110,16 +108,7 @@ export const make = async (
       typeof options["jsonnet-expr"] === "string")
   ) {
     passThroughChannel = drain(
-      await (typeof options["jq-expr"] === "string"
-        ? jqProcessor.makeChannel(options["jq-expr"], {
-            prelude: params["jq-prelude"],
-          })
-        : typeof options["jsonnet-expr"] === "string"
-        ? jsonnetProcessor.makeChannel(options["jsonnet-expr"], {
-            prelude: params["jsonnet-prelude"],
-            stepName: params.stepName,
-          })
-        : Promise.reject(new Error("shouldn't happen"))),
+      await makeProcessorChannel(params, options),
       async (response: unknown) => {
         requests[i++] = sendThing(response, target, method, headers);
         if (i === concurrent) {

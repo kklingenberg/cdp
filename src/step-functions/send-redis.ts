@@ -3,8 +3,6 @@ import { AsyncQueue, Channel, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
 import { check } from "../utils";
-import { processor as jqProcessor } from "../io/jq";
-import { processor as jsonnetProcessor } from "../io/jsonnet";
 import {
   connect,
   RedisConnectionOptions,
@@ -12,7 +10,7 @@ import {
   clusterSchema,
   RedisConnection,
 } from "../io/redis";
-import { PipelineStepFunctionParameters } from ".";
+import { PipelineStepFunctionParameters, makeProcessorChannel } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -159,16 +157,7 @@ export const make = async (
     typeof options["jsonnet-expr"] === "string"
   ) {
     passThroughChannel = drain(
-      await (typeof options["jq-expr"] === "string"
-        ? jqProcessor.makeChannel(options["jq-expr"], {
-            prelude: params["jq-prelude"],
-          })
-        : typeof options["jsonnet-expr"] === "string"
-        ? jsonnetProcessor.makeChannel(options["jsonnet-expr"], {
-            prelude: params["jsonnet-prelude"],
-            stepName: params.stepName,
-          })
-        : Promise.reject(new Error("shouldn't happen"))),
+      await makeProcessorChannel(params, options),
       sendMessage(client, options)
     );
   } else {

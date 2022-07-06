@@ -8,9 +8,7 @@ import {
 } from "../event";
 import { check } from "../utils";
 import { sendReceiveEvents, sendReceiveThing } from "../io/http-client";
-import { processor as jqProcessor } from "../io/jq";
-import { processor as jsonnetProcessor } from "../io/jsonnet";
-import { PipelineStepFunctionParameters } from ".";
+import { PipelineStepFunctionParameters, makeProcessorChannel } from ".";
 
 /**
  * Options for this function.
@@ -109,18 +107,8 @@ export const make = async (
     (typeof options["jq-expr"] === "string" ||
       typeof options["jsonnet-expr"] === "string")
   ) {
-    const processingChannel: Channel<Event[], unknown> = await (typeof options[
-      "jq-expr"
-    ] === "string"
-      ? jqProcessor.makeChannel(options["jq-expr"], {
-          prelude: params["jq-prelude"],
-        })
-      : typeof options["jsonnet-expr"] === "string"
-      ? jsonnetProcessor.makeChannel(options["jsonnet-expr"], {
-          prelude: params["jsonnet-prelude"],
-          stepName: params.stepName,
-        })
-      : Promise.reject(new Error("shouldn't happen")));
+    const processingChannel: Channel<Event[], unknown> =
+      await makeProcessorChannel(params, options);
     return flatMap(
       (thing: unknown) =>
         sendReceiveThing(
