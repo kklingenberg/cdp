@@ -4,6 +4,13 @@ name: "Event exposition"
 input:
   generator: exposition_example
 
+jsonnet-prelude: |-
+  local eventPipeline(event) =
+    event.t[std.length(event.t) - 1].p;
+
+  local eventSignature(event) =
+    event.t[std.length(event.t) - 1].h;
+
 steps:
   expose for prometheus:
     flatmap:
@@ -13,7 +20,18 @@ steps:
         responses: 100
         headers:
           Content-Type: text/plain; version=0.0.4
-        jq-expr: |
-          "# TYPE " + .[0].n + " gauge\n" +
-          (map(.n + " " + (.d | tostring)) | join("\n")) +
-          "\n"
+        jsonnet-expr: |-
+          function(events)
+            "# TYPE " + events[0].n + " gauge\n" +
+            std.join(
+              "\n",
+              std.map(
+                function(event)
+                  event.n +
+                  "{pipeline=\"" + eventPipeline(event) + "\"," +
+                  "signature=\"" + eventSignature(event) + "\"} " +
+                  std.toString(event.d),
+                events
+              )
+            ) +
+            "\n"

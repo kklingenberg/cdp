@@ -1,7 +1,7 @@
 # Example: Exposition
 
 This example illustrates the use of the `expose-http` step function,
-which together with `jq` filters can turn a CDP program into a
+which together with `jsonnet` code can turn a CDP program into a
 [Prometheus](https://prometheus.io/) scrape target.
 
 The example runs on its own. To start it, use:
@@ -26,8 +26,8 @@ docker compose down -v
 
 The example shows a pipeline that uses the `generator` input form to
 produce a steady stream of made-up events. It then exposes those
-events via HTTP using the `expose-http` step function and a `jq`
-filter. The exposed responses are compatible with the OpenMetrics
+events via HTTP using the `expose-http` step function and a `jsonnet`
+function. The exposed responses are compatible with the OpenMetrics
 format.
 
 A Prometheus instance is also configured to scrape those formatted
@@ -36,8 +36,8 @@ events.
 From these things you should observe two things:
 1. [The `generator` input form](/../../#generator).
 1. [The `expose-http` step function](/../../#expose-http), used in
-   tandem with a `jq` filter to convert events to an appropriate
-   format.
+   tandem with a `jsonnet` function to convert events to an
+   appropriate format.
 
 ## Pipeline file
 
@@ -51,6 +51,13 @@ name: "Event exposition"
 input:
   generator: exposition_example
 
+jsonnet-prelude: |-
+  local eventPipeline(event) =
+    event.t[std.length(event.t) - 1].p;
+
+  local eventSignature(event) =
+    event.t[std.length(event.t) - 1].h;
+
 steps:
   expose for prometheus:
     flatmap:
@@ -60,9 +67,20 @@ steps:
         responses: 100
         headers:
           Content-Type: text/plain; version=0.0.4
-        jq-expr: |
-          "# TYPE " + .[0].n + " gauge\n" +
-          (map(.n + " " + (.d | tostring)) | join("\n")) +
-          "\n"
+        jsonnet-expr: |-
+          function(events)
+            "# TYPE " + events[0].n + " gauge\n" +
+            std.join(
+              "\n",
+              std.map(
+                function(event)
+                  event.n +
+                  "{pipeline=\"" + eventPipeline(event) + "\"," +
+                  "signature=\"" + eventSignature(event) + "\"} " +
+                  std.toString(event.d),
+                events
+              )
+            ) +
+            "\n"
 
 ```

@@ -4,7 +4,8 @@ This project attempts to achieve a building block for complex data
 processing pipelines in the form of a pipeline _executor_, which can
 then bind inputs and outputs with other executors via stdin/stdout,
 HTTP, Redis, AMQP, or MQTT. Data processing tasks can be written
-inline or be delegated to external services.
+inline using [jq](https://stedolan.github.io/jq/) or
+[Jsonnet](https://jsonnet.org/), or be delegated to external services.
 
 ## Overview
 
@@ -746,6 +747,10 @@ vectors it receives, unmodified. It also prints the events to STDOUT.
 **string**, specifies a `jq` filter to apply before sending events to
 STDOUT.
 
+**`steps.<name>.(reduce|flatmap).send-stdout.jsonnet-expr`** optional
+**string**, specifies a `jsonnet` function code to apply before
+sending events to STDOUT.
+
 #### `send-file`
 
 **`steps.<name>.(reduce|flatmap).send-file`** **object** or
@@ -760,6 +765,10 @@ object.
 **`steps.<name>.(reduce|flatmap).send-file.jq-expr`** optional
 **string**, specifies a `jq` filter to apply before appending events
 to the specified file.
+
+**`steps.<name>.(reduce|flatmap).send-file.jsonnet-expr`** optional
+**string**, specifies a `jsonnet` function code to apply before
+appending events to the specified file.
 
 #### `send-http`
 
@@ -779,9 +788,16 @@ event-sending request. Defaults to **"POST"**.
 **`steps.<name>.(reduce|flatmap).send-http.jq-expr`** optional
 **string**, an optional `jq` filter to apply to events before creating
 the request. If this option is used, each distinct value produced by
-the filter is used for a separate request. If this option is not used,
-each event vector produces a request, and the content type header of
-the request is forced to `application/x-ndjson`.
+the filter is used for a separate request. If this option is not used
+(and neither `jsonnet-expr`), each event vector produces a request,
+and the content type header of the request is forced to
+`application/x-ndjson`.
+
+**`steps.<name>.(reduce|flatmap).send-http.jsonnet-expr`** optional
+**string**, an optional `jsonnet` function code to apply to events
+before creating the request. If this option is not used (and neither
+is `jq-expr`), each event vector produces a request, and the content
+type header of the request is forced to `application/x-ndjson`.
 
 **`steps.<name>.(reduce|flatmap).send-http.headers`** optional
 **object**, additional HTTP headers to use for the request. If not
@@ -845,8 +861,15 @@ should survive broker restarts (provided the queue does too).
 **string**, an optional `jq` filter to apply to events before
 publishing them. If this option is used, each distinct value produced
 by the filter is used for a separate publish. If this option is not
-used, each event vector is published wholly, and the content type
-header of the message is forced to `application/x-ndjson`.
+used (and neither is `jsonnet-expr`), each event vector is published
+wholly, and the content type header of the message is forced to
+`application/x-ndjson`.
+
+**`steps.<name>.(reduce|flatmap).send-amqp.jsonnet-expr`** optional
+**string**, an optional `jsonnet` function code to apply to events
+before publishing them. If this option is not used (and neither is
+`jq-expr`), each event vector is published wholly, and the content
+type header of the message is forced to `application/x-ndjson`.
 
 #### `send-mqtt`
 
@@ -876,8 +899,15 @@ messages. Defaults to **0**.
 **string**, an optional `jq` filter to apply to events before
 publishing them. If this option is used, each distinct value produced
 by the filter is used for a separate publish. If this option is not
-used, each event vector is published wholly, and the content type
-header of the message is forced to `application/x-ndjson`.
+used (and neither is `jsonnet-expr`, each event vector is published
+wholly, and the content type header of the message is forced to
+`application/x-ndjson`.
+
+**`steps.<name>.(reduce|flatmap).send-mqtt.jsonnet-expr`** optional
+**string**, an optional `jsonnet` function code to apply to events
+before publishing them. If this option is not used (and neither is
+`jq-expr`), each event vector is published wholly, and the content
+type header of the message is forced to `application/x-ndjson`.
 
 #### `send-redis`
 
@@ -941,6 +971,10 @@ corresponding command. This means that a trivial filter like `.` can
 be used to store lists of events instead of plain events in each
 element of a redis list.
 
+**`steps.<name>.(reduce|flatmap).send-redis.jsonnet-expr`** optional
+**string**, specifies a `jsonnet` function code to apply before
+forwarding events.
+
 #### `expose-http`
 
 **`steps.<name>.(reduce|flatmap).expose-http`** **object**, a function
@@ -978,6 +1012,10 @@ event it contains, which are each in turn kept in the buffer of
 maximum size `responses`. It might be preferrable to use jq's `map()`
 instead to process _and_ keeping them in a single response.
 
+**`steps.<name>.(reduce|flatmap).expose-http.jsonnet-expr`** optional
+**string**, an optional `jsonnet` function code to apply to event
+windows before creating the responses.
+
 #### `send-receive-jq`
 
 **`steps.<name>.(reduce|flatmap).send-receive-jq`** **string** or
@@ -999,6 +1037,29 @@ wrapped. See [wrapping](#wrapping).
 **`steps.<name>.(reduce|flatmap).send-receive-jq.wrap.raw`** optional
 **boolean**, whether to treat received data as plain text, not JSON.
 
+#### `send-receive-jsonnet`
+
+**`steps.<name>.(reduce|flatmap).send-receive-jsonnet`** **string** or
+**object**, a function that sends the event vector to `jsonnet` for
+processing, and parses its output and produces new events. If given a
+string, it's used as the `jsonnet` function code.
+
+**`steps.<name>.(reduce|flatmap).send-receive-jsonnet.jsonnet-expr`**
+required **string**, the `jsonnet` function code to use.
+
+**`steps.<name>.(reduce|flatmap).send-receive-jsonnet.wrap`** optional
+**string** or **object**, a wrapping directive which specifies that
+incoming data from `jsonnet` is not encoded events, and thus should be
+wrapped. See [wrapping](#wrapping).
+
+**`steps.<name>.(reduce|flatmap).send-receive-jsonnet.wrap.name`**
+required **string**, the name given to the events that wrap the
+received data.
+
+**`steps.<name>.(reduce|flatmap).send-receive-jsonnet.wrap.raw`**
+optional **boolean**, whether to treat received data as plain text,
+not JSON.
+
 #### `send-receive-http`
 
 **`steps.<name>.(reduce|flatmap).send-receive-http`** **string** or
@@ -1018,9 +1079,16 @@ event-sending request. Defaults to **"POST"**.
 **`steps.<name>.(reduce|flatmap).send-receive-http.jq-expr`** optional
 **string**, an optional `jq` filter to apply to events before creating
 the request. If this option is used, each distinct value produced by
-the filter is used for a separate request. If this option is not used,
-each event vector produces a request, and the content type header of
-the request is forced to `application/x-ndjson`.
+the filter is used for a separate request. If this option is not used
+(and neither is `jsonnet-expr`), each event vector produces a request,
+and the content type header of the request is forced to
+`application/x-ndjson`.
+
+**`steps.<name>.(reduce|flatmap).send-receive-http.jsonnet-expr`**
+optional **string**, an optional `jsonnet` function to apply to events
+before creating the request. If this option is not used (and neither
+is `jq-expr`), the content type header of the request is forced to
+`application/x-ndjson`.
 
 **`steps.<name>.(reduce|flatmap).send-receive-http.headers`** optional
 **object**, additional HTTP headers to use for the request. If not
@@ -1055,6 +1123,20 @@ all filters with a
 errors will thus be silently skipped over, so it can be very important
 to always test your `jq` filters in controlled environments.
 
+#### About `jsonnet` expressions
+
+As an alternative to `jq` in most step processing functions,
+[`jsonnet`](https://jsonnet.org/) may be used instead (typically under
+a `jsonnet-expr` option). When writing `jsonnet` expressions, consider
+that the events will be given as [top-level
+arguments](https://jsonnet.org/learning/tutorial.html#parameterize-entire-config),
+so the expression should reduce to a single function that receives an
+`events` argument.
+
+Opposite `jq`-based processing, `jsonnet` will emit error messages to
+stderr when runtime errors are encountered. Still, it's good practice
+to test your `jsonnet` code in a controlled environment.
+
 ### `jq-prelude`
 
 Since `jq` is favoured as an outwards-facing filter and most step
@@ -1067,6 +1149,15 @@ the ideal place to place functions in.
 
 An example of usage can be found in the [stress test
 example](examples/stress-test).
+
+### `jsonnet-prelude`
+
+As with `jq`, `jsonnet` expressions can also be prepended with common
+definitions. `jsonnet-prelude` provides an in-pipeline place for
+placing common definitions, such as functions.
+
+An example of usage can be found in the [exposition
+example](examples/exposition).
 
 ### Metrics
 
