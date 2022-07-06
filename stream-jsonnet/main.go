@@ -10,13 +10,25 @@ import (
 	"os"
 )
 
+// This program receives a snippet of Jsonnet code and applies it
+// continuously to all stdin lines, feeding each line as a top-level
+// argument. The output is compacted and written to stdout, in one
+// line for evaluation result. Errors found during Jsonnet execution
+// produce no output.
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "Usage: stream-jsonnet <tag> <code>")
+	if len(os.Args) > 4 || len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "Usage: stream-jsonnet [tag [input]] <code>")
 		os.Exit(1)
 	}
-	tag := os.Args[1]
-	jsonnetProgram := os.Args[2]
+	jsonnetProgram := os.Args[len(os.Args)-1]
+	tag := "stream.jsonnet"
+	if len(os.Args) > 2 {
+		tag = os.Args[1]
+	}
+	input := "input"
+	if len(os.Args) > 3 {
+		tag = os.Args[2]
+	}
 
 	// Check the syntactic correctness of the jsonnet program.
 	ast, err := jsonnet.SnippetToAST(tag, jsonnetProgram)
@@ -31,7 +43,7 @@ func main() {
 	for {
 		switch line, err := reader.ReadString('\n'); err {
 		case nil:
-			jsonnetVM.TLACode("events", line)
+			jsonnetVM.TLACode(input, line)
 			output, err := jsonnetVM.Evaluate(ast)
 			if err != nil {
 				// Since the Jsonnet program was deemed syntactically

@@ -1,9 +1,12 @@
 import { appendFile as appendFileCallback } from "fs";
 import { promisify } from "util";
+import { match, P } from "ts-pattern";
 import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
-import { makeChannel } from "../io/jq";
+import { check } from "../utils";
+import { processor as jqProcessor } from "../io/jq";
+import { processor as jsonnetProcessor } from "../io/jsonnet";
 import { PipelineStepFunctionParameters } from ".";
 
 /**
@@ -24,7 +27,8 @@ export type SendFileFunctionOptions =
   | string
   | {
       path: string;
-      ["jq-expr"]?: string;
+      "jq-expr"?: string;
+      "jsonnet-expr"?: string;
     };
 
 /**
@@ -38,6 +42,7 @@ export const optionsSchema = {
       properties: {
         path: { type: "string", minLength: 1 },
         "jq-expr": { type: "string", minLength: 1 },
+        "jsonnet-expr": { type: "string", minLength: 1 },
       },
       additionalProperties: false,
       required: ["path"],
@@ -52,8 +57,17 @@ export const optionsSchema = {
  * @param name The name of the step this function belongs to.
  * @param options The options to validate.
  */
-export const validate = (): void => {
-  // Nothing needs to be validated.
+export const validate = (
+  name: string,
+  options: SendFileFunctionOptions
+): void => {
+  check(
+    match(options).with(
+      { "jq-expr": P.string, "jsonnet-expr": P.string },
+      () => false
+    ),
+    `step '${name}' can't use both jq and jsonnet expressions simultaneously`
+  );
 };
 
 /**
@@ -70,11 +84,23 @@ export const make = async (
   options: SendFileFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const path = typeof options === "string" ? options : options.path;
-  let forwarder: (events: Event[]) => void;
-  let closeExternal: () => Promise<void>;
-  if (typeof options === "object" && typeof options["jq-expr"] === "string") {
-    const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"], { prelude: params["jq-prelude"] }),
+  let passThroughChannel: Channel<Event[], never>;
+  if (
+    typeof options === "object" &&
+    (typeof options["jq-expr"] === "string" ||
+      typeof options["jsonnet-expr"] === "string")
+  ) {
+    passThroughChannel = drain(
+      await (typeof options["jq-expr"] === "string"
+        ? jqProcessor.makeChannel(options["jq-expr"], {
+            prelude: params["jq-prelude"],
+          })
+        : typeof options["jsonnet-expr"] === "string"
+        ? jsonnetProcessor.makeChannel(options["jsonnet-expr"], {
+            prelude: params["jsonnet-prelude"],
+            stepName: params.stepName,
+          })
+        : Promise.reject(new Error("shouldn't happen"))),
       async (result: unknown) => {
         try {
           await appendFile(
@@ -87,10 +113,8 @@ export const make = async (
         }
       }
     );
-    forwarder = jqChannel.send.bind(jqChannel);
-    closeExternal = jqChannel.close.bind(jqChannel);
   } else {
-    const accumulatingChannel: Channel<Event[], never> = drain(
+    passThroughChannel = drain(
       new AsyncQueue<Event[]>(
         `step.${params.stepName}.send-file.accumulating`
       ).asChannel(),
@@ -104,21 +128,19 @@ export const make = async (
         }
       }
     );
-    forwarder = accumulatingChannel.send.bind(accumulatingChannel);
-    closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
   const queue = new AsyncQueue<Event[]>(
     `step.${params.stepName}.send-file.forward`
   );
   const forwardingChannel = flatMap(async (events: Event[]) => {
-    forwarder(events);
+    passThroughChannel.send(events);
     return events;
   }, queue.asChannel());
   return {
     ...forwardingChannel,
     close: async () => {
       await forwardingChannel.close();
-      await closeExternal();
+      await passThroughChannel.close();
     },
   };
 };

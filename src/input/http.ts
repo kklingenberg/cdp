@@ -13,7 +13,8 @@ import {
   validateWrap,
 } from "../event";
 import { makeHTTPServer } from "../io/http-server";
-import { isHealthy } from "../io/jq";
+import { processor as jqProcessor } from "../io/jq";
+import { processor as jsonnetProcessor } from "../io/jsonnet";
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
 import { check } from "../utils";
@@ -125,7 +126,7 @@ export const make = (
       ctx.request.path === HTTP_SERVER_HEALTH_ENDPOINT
     ) {
       ctx.type = "application/health+json";
-      if (isHealthy()) {
+      if (jqProcessor.isHealthy() && jsonnetProcessor.isHealthy()) {
         ctx.body = JSON.stringify({ status: "pass" });
       } else {
         logger.warn("Notified unhealthy status");

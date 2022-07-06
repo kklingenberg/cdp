@@ -11,16 +11,16 @@ import {
   validateWrap,
 } from "../event";
 import { check } from "../utils";
-import { processor } from "../io/jq";
+import { processor } from "../io/jsonnet";
 import { PipelineStepFunctionParameters } from ".";
 
 /**
  * Options for this function.
  */
-export type SendReceiveJqFunctionOptions =
+export type SendReceiveJsonnetFunctionOptions =
   | string
   | {
-      "jq-expr": string;
+      "jsonnet-expr": string;
       wrap?: WrapDirective;
     };
 
@@ -33,25 +33,25 @@ export const optionsSchema = {
     {
       type: "object",
       properties: {
-        "jq-expr": { type: "string", minLength: 1 },
+        "jsonnet-expr": { type: "string", minLength: 1 },
         wrap: wrapDirectiveSchema,
       },
       additionalProperties: false,
-      required: ["jq-expr"],
+      required: ["jsonnet-expr"],
     },
   ],
 };
 
 /**
- * Validate send-receive-jq options, after they've been checked by the
- * ajv schema.
+ * Validate send-receive-jsonnet options, after they've been checked
+ * by the ajv schema.
  *
  * @param name The name of the step this function belongs to.
  * @param options The options to validate.
  */
 export const validate = (
   name: string,
-  options: SendReceiveJqFunctionOptions
+  options: SendReceiveJsonnetFunctionOptions
 ): void => {
   check(
     match(options).with({ wrap: P.select() }, (wrap) =>
@@ -61,17 +61,18 @@ export const validate = (
 };
 
 /**
- * Function that transforms events using jq.
+ * Function that transforms events using jsonnet.
  *
  * @param params Configuration parameters acquired from the pipeline.
- * @param options The jq program that transforms events.
- * @returns A channel that transforms events via jq.
+ * @param options The jsonnet program that transforms events.
+ * @returns A channel that transforms events via jsonnet.
  */
 export const make = async (
   params: PipelineStepFunctionParameters,
-  options: SendReceiveJqFunctionOptions
+  options: SendReceiveJsonnetFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
-  const program = typeof options === "string" ? options : options["jq-expr"];
+  const program =
+    typeof options === "string" ? options : options["jsonnet-expr"];
   const parse = chooseParser((typeof options === "string" ? {} : options).wrap);
   const wrapper = makeWrapper(
     (typeof options === "string" ? {} : options).wrap
@@ -84,12 +85,13 @@ export const make = async (
     program,
     {
       parse,
-      prelude: params["jq-prelude"],
+      prelude: params["jsonnet-prelude"],
+      stepName: params.stepName,
     }
   );
   return parseChannel(
     flatMap(async (d) => [wrapper(d)], channel),
     parser,
-    "parsing jq output"
+    "parsing jsonnet output"
   );
 };

@@ -8,7 +8,8 @@ import {
 } from "../event";
 import { check } from "../utils";
 import { sendReceiveEvents, sendReceiveThing } from "../io/http-client";
-import { makeChannel } from "../io/jq";
+import { processor as jqProcessor } from "../io/jq";
+import { processor as jsonnetProcessor } from "../io/jsonnet";
 import { PipelineStepFunctionParameters } from ".";
 
 /**
@@ -19,7 +20,8 @@ export type SendReceiveHTTPFunctionOptions =
   | {
       target: string;
       method?: "POST" | "PUT" | "PATCH";
-      ["jq-expr"]?: string;
+      "jq-expr"?: string;
+      "jsonnet-expr"?: string;
       headers?: { [key: string]: string | number | boolean };
       wrap?: WrapDirective;
     };
@@ -36,6 +38,7 @@ export const optionsSchema = {
         target: { type: "string", minLength: 1 },
         method: { enum: ["POST", "PUT", "PATCH"] },
         "jq-expr": { type: "string", minLength: 1 },
+        "jsonnet-expr": { type: "string", minLength: 1 },
         headers: {
           type: "object",
           properties: {},
@@ -66,10 +69,18 @@ export const validate = (
   name: string,
   options: SendReceiveHTTPFunctionOptions
 ): void => {
+  const matchOptions = match(options);
   check(
-    match(options).with({ wrap: P.select() }, (wrap) =>
+    matchOptions.with({ wrap: P.select() }, (wrap) =>
       validateWrap(wrap, `step '${name}' wrap option`)
     )
+  );
+  check(
+    matchOptions.with(
+      { "jq-expr": P.string, "jsonnet-expr": P.string },
+      () => false
+    ),
+    `step '${name}' can't use both jq and jsonnet expressions simultaneously`
   );
 };
 
@@ -93,11 +104,23 @@ export const make = async (
     typeof options === "string" ? "POST" : options.method ?? "POST";
   const headers = typeof options === "string" ? {} : options.headers ?? {};
   const wrap = typeof options === "string" ? undefined : options.wrap;
-  if (typeof options !== "string" && typeof options["jq-expr"] === "string") {
-    const jqChannel: Channel<Event[], unknown> = await makeChannel(
-      options["jq-expr"],
-      { prelude: params["jq-prelude"] }
-    );
+  if (
+    typeof options !== "string" &&
+    (typeof options["jq-expr"] === "string" ||
+      typeof options["jsonnet-expr"] === "string")
+  ) {
+    const processingChannel: Channel<Event[], unknown> = await (typeof options[
+      "jq-expr"
+    ] === "string"
+      ? jqProcessor.makeChannel(options["jq-expr"], {
+          prelude: params["jq-prelude"],
+        })
+      : typeof options["jsonnet-expr"] === "string"
+      ? jsonnetProcessor.makeChannel(options["jsonnet-expr"], {
+          prelude: params["jsonnet-prelude"],
+          stepName: params.stepName,
+        })
+      : Promise.reject(new Error("shouldn't happen")));
     return flatMap(
       (thing: unknown) =>
         sendReceiveThing(
@@ -109,7 +132,7 @@ export const make = async (
           headers,
           wrap
         ),
-      jqChannel
+      processingChannel
     );
   } else {
     const queue = new AsyncQueue<Event[]>(

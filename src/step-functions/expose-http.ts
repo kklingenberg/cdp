@@ -5,7 +5,8 @@ import { Event } from "../event";
 import { makeLogger } from "../log";
 import { check, getSignature, mergeHeaders } from "../utils";
 import { makeHTTPServer } from "../io/http-server";
-import { makeChannel } from "../io/jq";
+import { processor as jqProcessor } from "../io/jq";
+import { processor as jsonnetProcessor } from "../io/jsonnet";
 import { PipelineStepFunctionParameters } from ".";
 
 /**
@@ -21,7 +22,8 @@ export type ExposeHTTPFunctionOptions = {
   port: number | string;
   responses: number | string;
   headers?: { [key: string]: string | string[] };
-  ["jq-expr"]?: string;
+  "jq-expr"?: string;
+  "jsonnet-expr"?: string;
 };
 
 /**
@@ -54,6 +56,7 @@ export const optionsSchema = {
       },
     },
     "jq-expr": { type: "string", minLength: 1 },
+    "jsonnet-expr": { type: "string", minLength: 1 },
   },
   additionalProperties: false,
   required: ["endpoint", "port", "responses"],
@@ -70,12 +73,20 @@ export const validate = (
   name: string,
   options: ExposeHTTPFunctionOptions
 ): void => {
+  const matchOptions = match(options);
   check(
-    match(options).with({ port: P.select(P.string) }, (rawPort) =>
+    matchOptions.with({ port: P.select(P.string) }, (rawPort) =>
       ((port) => port >= 1 && port <= 65535)(parseInt(rawPort, 10))
     ),
     `step '${name}' uses an invalid expose-http.port value ` +
       "(must be between 1 and 65535, inclusive)"
+  );
+  check(
+    matchOptions.with(
+      { "jq-expr": P.string, "jsonnet-expr": P.string },
+      () => false
+    ),
+    `step '${name}' can't use both jq and jsonnet expressions simultaneously`
   );
 };
 
@@ -189,9 +200,21 @@ export const make = async (
   };
 
   let responsesChannel: Channel<Event[], never>;
-  if (typeof options["jq-expr"] === "string") {
+  if (
+    typeof options["jq-expr"] === "string" ||
+    typeof options["jsonnet-expr"] === "string"
+  ) {
     responsesChannel = drain(
-      await makeChannel(options["jq-expr"], { prelude: params["jq-prelude"] }),
+      await (typeof options["jq-expr"] === "string"
+        ? jqProcessor.makeChannel(options["jq-expr"], {
+            prelude: params["jq-prelude"],
+          })
+        : typeof options["jsonnet-expr"] === "string"
+        ? jsonnetProcessor.makeChannel(options["jsonnet-expr"], {
+            prelude: params["jsonnet-prelude"],
+            stepName: params.stepName,
+          })
+        : Promise.reject(new Error("shouldn't happen"))),
       async (thing: unknown) => {
         const [key, response] = await makeGenericResponse(thing);
         registerResponse(key, response);

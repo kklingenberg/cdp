@@ -2,7 +2,8 @@ import { match, P } from "ts-pattern";
 import { flatMap, compose } from "./async-queue";
 import { INPUT_DRAIN_TIMEOUT, HEALTH_CHECK_INTERVAL } from "./conf";
 import { Event } from "./event";
-import { isHealthy } from "./io/jq";
+import { processor as jqProcessor } from "./io/jq";
+import { processor as jsonnetProcessor } from "./io/jsonnet";
 import { makeLogger } from "./log";
 import {
   pipelineEvents,
@@ -54,6 +55,8 @@ import * as sendReceiveHTTPFunctionModule from "./step-functions/send-receive-ht
 import { SendReceiveHTTPFunctionOptions } from "./step-functions/send-receive-http";
 import * as sendReceiveJqFunctionModule from "./step-functions/send-receive-jq";
 import { SendReceiveJqFunctionOptions } from "./step-functions/send-receive-jq";
+import * as sendReceiveJsonnetFunctionModule from "./step-functions/send-receive-jsonnet";
+import { SendReceiveJsonnetFunctionOptions } from "./step-functions/send-receive-jsonnet";
 import * as sendFileFunctionModule from "./step-functions/send-file";
 import { SendFileFunctionOptions } from "./step-functions/send-file";
 import * as sendSTDOUTFunctionModule from "./step-functions/send-stdout";
@@ -129,6 +132,7 @@ const stepFunctionModules = {
   "send-redis": sendRedisFunctionModule,
   "expose-http": exposeHTTPFunctionModule,
   "send-receive-jq": sendReceiveJqFunctionModule,
+  "send-receive-jsonnet": sendReceiveJsonnetFunctionModule,
   "send-receive-http": sendReceiveHTTPFunctionModule,
 };
 
@@ -148,6 +152,7 @@ type StepFunctionTemplate =
   | { "send-redis": SendRedisFunctionOptions }
   | { "expose-http": ExposeHTTPFunctionOptions }
   | { "send-receive-jq": SendReceiveJqFunctionOptions }
+  | { "send-receive-jsonnet": SendReceiveJsonnetFunctionOptions }
   | { "send-receive-http": SendReceiveHTTPFunctionOptions };
 const stepFunctionTemplateSchema = {
   anyOf: Object.entries(stepFunctionModules).map(([key, mod]) =>
@@ -163,6 +168,7 @@ interface PipelineTemplate {
   name: string;
   input: InputTemplate;
   "jq-prelude"?: string;
+  "jsonnet-prelude"?: string;
   steps?: {
     [key: string]: {
       after?: string[];
@@ -183,6 +189,7 @@ const pipelineTemplateSchema = {
     name: { type: "string", minLength: 1 },
     input: inputTemplateSchema,
     "jq-prelude": { type: "string", minLength: 1 },
+    "jsonnet-prelude": { type: "string", minLength: 1 },
     steps: {
       type: "object",
       properties: {},
@@ -317,6 +324,7 @@ export const runPipeline = async (
     pipelineName: template.name,
     pipelineSignature: signature,
     "jq-prelude": template["jq-prelude"],
+    "jsonnet-prelude": template["jsonnet-prelude"],
   };
   // Zero pipeline metrics.
   pipelineEvents.inc({ flow: "in" }, 0);
@@ -365,6 +373,7 @@ export const runPipeline = async (
       pipelineSignature: signature,
       stepName: name,
       "jq-prelude": template["jq-prelude"],
+      "jsonnet-prelude": template["jsonnet-prelude"],
     };
     const fn = await stepFunctionModules[
       stepFunctionName as keyof typeof stepFunctionModules
@@ -402,7 +411,7 @@ export const runPipeline = async (
   let interval: ReturnType<typeof setInterval> | null = null;
   if (HEALTH_CHECK_INTERVAL > 0) {
     interval = setInterval(() => {
-      if (!isHealthy()) {
+      if (!jqProcessor.isHealthy() || !jsonnetProcessor.isHealthy()) {
         logger.error(
           "Pipeline isn't healthy; draining queues and shutting down"
         );

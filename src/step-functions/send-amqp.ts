@@ -4,7 +4,8 @@ import { AsyncQueue, Channel, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
 import { check } from "../utils";
-import { makeChannel } from "../io/jq";
+import { processor as jqProcessor } from "../io/jq";
+import { processor as jsonnetProcessor } from "../io/jsonnet";
 import { PipelineStepFunctionParameters } from ".";
 
 /**
@@ -28,6 +29,7 @@ interface ExtendedSendAMQPFunctionOptions {
   priority?: number | string;
   persistent?: boolean | "true" | "false";
   "jq-expr"?: string;
+  "jsonnet-expr"?: string;
 }
 
 /**
@@ -70,6 +72,7 @@ export const optionsSchema = {
     },
     persistent: { anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }] },
     "jq-expr": { type: "string", minLength: 1 },
+    "jsonnet-expr": { type: "string", minLength: 1 },
   },
   additionalProperties: false,
   required: ["url", "exchange"],
@@ -98,6 +101,13 @@ export const validate = (
       ((n) => n >= 0 && n <= 255)(parseInt(priority, 10))
     ),
     `step '${name}' has an invalid value for send-amqp.priority (must be >= 0 and < 256)`
+  );
+  check(
+    matchOptions.with(
+      { "jq-expr": P.string, "jsonnet-expr": P.string },
+      () => false
+    ),
+    `step '${name}' can't use both jq and jsonnet expressions simultaneously`
   );
 };
 
@@ -173,11 +183,22 @@ export const make = async (
           : options.exchange?.["auto-delete"] ?? false,
     }
   );
-  let forwarder: (events: Event[]) => void;
-  let closeExternal: () => Promise<void>;
-  if (typeof options["jq-expr"] === "string") {
-    const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"], { prelude: params["jq-prelude"] }),
+  let passThroughChannel: Channel<Event[], never>;
+  if (
+    typeof options["jq-expr"] === "string" ||
+    typeof options["jsonnet-expr"] === "string"
+  ) {
+    passThroughChannel = drain(
+      await (typeof options["jq-expr"] === "string"
+        ? jqProcessor.makeChannel(options["jq-expr"], {
+            prelude: params["jq-prelude"],
+          })
+        : typeof options["jsonnet-expr"] === "string"
+        ? jsonnetProcessor.makeChannel(options["jsonnet-expr"], {
+            prelude: params["jsonnet-prelude"],
+            stepName: params.stepName,
+          })
+        : Promise.reject(new Error("shouldn't happen"))),
       async (message: unknown) => {
         const flushed = ch.publish(
           exchange,
@@ -203,10 +224,8 @@ export const make = async (
         }
       }
     );
-    forwarder = jqChannel.send.bind(jqChannel);
-    closeExternal = jqChannel.close.bind(jqChannel);
   } else {
-    const passThroughChannel: Channel<Event[], never> = drain(
+    passThroughChannel = drain(
       new AsyncQueue<Event[]>(
         `step.${params.stepName}.send-amqp.pass-through`
       ).asChannel(),
@@ -234,21 +253,19 @@ export const make = async (
         }
       }
     );
-    forwarder = passThroughChannel.send.bind(passThroughChannel);
-    closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
   const queue = new AsyncQueue<Event[]>(
     `step.${params.stepName}.send-amqp.forward`
   );
   const forwardingChannel = flatMap(async (events: Event[]) => {
-    forwarder(events);
+    passThroughChannel.send(events);
     return events;
   }, queue.asChannel());
   return {
     ...forwardingChannel,
     close: async () => {
       await forwardingChannel.close();
-      await closeExternal();
+      await passThroughChannel.close();
       await ch.close();
       await conn.close();
     },

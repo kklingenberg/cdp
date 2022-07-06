@@ -6,4 +6,5 @@ export interface PipelineStepFunctionParameters {
   pipelineSignature: string;
   stepName: string;
   "jq-prelude"?: string;
+  "jsonnet-prelude"?: string;
 }
