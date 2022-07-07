@@ -114,6 +114,27 @@ name: "Checking divisivility and applying primality heuristics"
 input:
   http: /events
 
+# Define multiplication modulo and exponentiation modulo, since the
+# naive implementations fail for large numbers
+jq-prelude: |-
+  def mulmod($a; $b; $m): [$a, $b, 0] | until(
+    .[0] == 0;
+    [
+      (.[0] / 2 | floor),
+      fmod(.[1] + .[1]; $m),
+      if fmod(.[0]; 2) == 1 then fmod(.[2] + .[1]; $m) else .[2] end
+    ]
+  ) | .[2];
+
+  def expmod($a; $b; $m): [$b, $a, 1] | until(
+    .[0] == 0;
+    [
+      (.[0] / 2 | floor),
+      mulmod(.[1]; .[1]; $m),
+      if fmod(.[0]; 2) == 1 then mulmod(.[2]; .[1]; $m) else .[2] end
+    ]
+  ) | .[2];
+
 steps:
   numbers:
     flatmap:
@@ -163,24 +184,6 @@ steps:
     reduce:
       send-receive-jq:
         jq-expr: |-
-          def mulmod($a; $b; $m): [$a, $b, 0] | until(
-            .[0] == 0;
-            [
-              (.[0] / 2 | floor),
-              fmod(.[1] + .[1]; $m),
-              if fmod(.[0]; 2) == 1 then fmod(.[2] + .[1]; $m) else .[2] end
-            ]
-          ) | .[2];
-
-          def expmod($a; $b; $m): [$b, $a, 1] | until(
-            .[0] == 0;
-            [
-              (.[0] / 2 | floor),
-              mulmod(.[1]; .[1]; $m),
-              if fmod(.[0]; 2) == 1 then mulmod(.[2]; .[1]; $m) else .[2] end
-            ]
-          ) | .[2];
-
           map(
             .d as $n
             | expmod(31; $n - 1; $n)
@@ -197,24 +200,6 @@ steps:
     reduce:
       send-receive-jq:
         jq-expr: |-
-          def mulmod($a; $b; $m): [$a, $b, 0] | until(
-            .[0] == 0;
-            [
-              (.[0] / 2 | floor),
-              fmod(.[1] + .[1]; $m),
-              if fmod(.[0]; 2) == 1 then fmod(.[2] + .[1]; $m) else .[2] end
-            ]
-          ) | .[2];
-
-          def expmod($a; $b; $m): [$b, $a, 1] | until(
-            .[0] == 0;
-            [
-              (.[0] / 2 | floor),
-              mulmod(.[1]; .[1]; $m),
-              if fmod(.[0]; 2) == 1 then mulmod(.[2]; .[1]; $m) else .[2] end
-            ]
-          ) | .[2];
-
           map(
             .d as $n
             | expmod(73; $n - 1; $n)

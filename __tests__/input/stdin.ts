@@ -17,9 +17,10 @@ import { consume } from "../test-utils";
 
 test("@standalone The stdin input form works as expected", async () => {
   // Arrange
-  const [channel] = make("irrelevant", "irrelevant", {
-    wrap: { name: "test", raw: true },
-  });
+  const [channel] = make(
+    { pipelineName: "irrelevant", pipelineSignature: "irrelevant" },
+    { wrap: { name: "test", raw: true } }
+  );
   // Act
   const sent = channel.send();
   const output = await consume(channel.receive);

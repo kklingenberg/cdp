@@ -4,7 +4,7 @@ import { AsyncQueue, Channel, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
 import { check } from "../utils";
-import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters, makeProcessorChannel } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -27,6 +27,7 @@ interface ExtendedSendAMQPFunctionOptions {
   priority?: number | string;
   persistent?: boolean | "true" | "false";
   "jq-expr"?: string;
+  "jsonnet-expr"?: string;
 }
 
 /**
@@ -69,6 +70,7 @@ export const optionsSchema = {
     },
     persistent: { anyOf: [{ type: "boolean" }, { enum: ["true", "false"] }] },
     "jq-expr": { type: "string", minLength: 1 },
+    "jsonnet-expr": { type: "string", minLength: 1 },
   },
   additionalProperties: false,
   required: ["url", "exchange"],
@@ -98,6 +100,13 @@ export const validate = (
     ),
     `step '${name}' has an invalid value for send-amqp.priority (must be >= 0 and < 256)`
   );
+  check(
+    matchOptions.with(
+      { "jq-expr": P.string, "jsonnet-expr": P.string },
+      () => false
+    ),
+    `step '${name}' can't use both jq and jsonnet expressions simultaneously`
+  );
 };
 
 /**
@@ -110,19 +119,13 @@ const DEFAULT_EXCHANGE_TYPE = "topic";
  * Function that sends events to an AMQP broker, and forwards the same
  * events to the rest of the pipeline unmodified.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param variantOptions The options that indicate how to connect and
  * send events to the AMQP broker.
  * @returns A channel that forwards events to an AMQP broker.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   variantOptions: SendAMQPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const options: ExtendedSendAMQPFunctionOptions =
@@ -163,7 +166,11 @@ export const make = async (
   const conn = await connect(options.url);
   conn.on("error", (err) => logger.error(`Error on AMQP connection: ${err}`));
   const ch = await conn.createChannel();
+  let closed = false;
   ch.on("error", (err) => logger.error(`Error on AMQP channel: ${err}`));
+  ch.on("close", () => {
+    closed = true;
+  });
   const { exchange } = await ch.assertExchange(
     options.exchange?.name ?? DEFAULT_EXCHANGE_NAME,
     options.exchange?.type ?? DEFAULT_EXCHANGE_TYPE,
@@ -178,11 +185,13 @@ export const make = async (
           : options.exchange?.["auto-delete"] ?? false,
     }
   );
-  let forwarder: (events: Event[]) => void;
-  let closeExternal: () => Promise<void>;
-  if (typeof options["jq-expr"] === "string") {
-    const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"]),
+  let passThroughChannel: Channel<Event[], never>;
+  if (
+    typeof options["jq-expr"] === "string" ||
+    typeof options["jsonnet-expr"] === "string"
+  ) {
+    passThroughChannel = drain(
+      await makeProcessorChannel(params, options),
       async (message: unknown) => {
         const flushed = ch.publish(
           exchange,
@@ -203,17 +212,18 @@ export const make = async (
           "with routing key",
           routingKey
         );
-        if (!flushed) {
-          await new Promise((resolve) => ch.once("drain", resolve));
+        if (!flushed && !closed) {
+          await Promise.race([
+            new Promise((resolve) => ch.once("drain", resolve)),
+            new Promise((resolve) => ch.once("close", resolve)),
+          ]);
         }
       }
     );
-    forwarder = jqChannel.send.bind(jqChannel);
-    closeExternal = jqChannel.close.bind(jqChannel);
   } else {
-    const passThroughChannel: Channel<Event[], never> = drain(
+    passThroughChannel = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.send-amqp.pass-through`
+        `step.${params.stepName}.send-amqp.pass-through`
       ).asChannel(),
       async (events: Event[]) => {
         const flushed = ch.publish(
@@ -234,24 +244,24 @@ export const make = async (
           "with routing key",
           routingKey
         );
-        if (!flushed) {
+        if (!flushed && !closed) {
           await new Promise((resolve) => ch.once("drain", resolve));
         }
       }
     );
-    forwarder = passThroughChannel.send.bind(passThroughChannel);
-    closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-amqp.forward`);
+  const queue = new AsyncQueue<Event[]>(
+    `step.${params.stepName}.send-amqp.forward`
+  );
   const forwardingChannel = flatMap(async (events: Event[]) => {
-    forwarder(events);
+    passThroughChannel.send(events);
     return events;
   }, queue.asChannel());
   return {
     ...forwardingChannel,
     close: async () => {
       await forwardingChannel.close();
-      await closeExternal();
+      await passThroughChannel.close();
       await ch.close();
       await conn.close();
     },

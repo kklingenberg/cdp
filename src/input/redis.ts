@@ -22,6 +22,7 @@ import {
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
 import { check, resolveAfter, makeFuse } from "../utils";
+import { PipelineInputParameters } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -119,10 +120,7 @@ const toargs = (option: string[] | string | undefined): string[] =>
  * Creates an input channel based on data coming from a redis
  * instance. Returns a pair of [channel, endPromise].
  *
- * @param pipelineName The name of the pipeline that will use this
- * input.
- * @param pipelineSignature The signature of the pipeline that will
- * use this input.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The redis options to configure the input channel.
  * @returns A pair of a channel that connects to a redis instance or
  * cluster and produces events from SUBSCRIBE, PSUBSCRIBE, BLPOP or
@@ -130,13 +128,15 @@ const toargs = (option: string[] | string | undefined): string[] =>
  * external causes.
  */
 export const make = (
-  pipelineName: string,
-  pipelineSignature: string,
+  params: PipelineInputParameters,
   options: RedisInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
   const parse = chooseParser(options.wrap);
   const wrapper = makeWrapper(options.wrap);
-  const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
+  const eventParser = makeNewEventParser(
+    params.pipelineName,
+    params.pipelineSignature
+  );
   const client: RedisConnection = connect(options);
 
   const channel = flatMap(async (message: string) => {

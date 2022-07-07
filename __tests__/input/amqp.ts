@@ -11,9 +11,14 @@ const testEvents = [
   { n: "baz", d: "bazz" },
 ];
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+};
+
 test("@amqp The amqp input form builds a one-way channel", async () => {
   // Arrange
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     url: brokerUrl,
     exchange: { name: "test1.input", type: "direct" },
   });
@@ -33,7 +38,7 @@ test("@amqp The amqp input closes automatically on corrupted channels", async ()
   const ch = await conn.createChannel();
   await ch.assertExchange("test2.input", "direct", { durable: false });
   // Act & assert
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     url: brokerUrl,
     exchange: { name: "test2.input", type: "direct", durable: true },
   });
@@ -50,7 +55,7 @@ test("@amqp The amqp input works as expected on direct exchanges", async () => {
   const conn = await connect(brokerUrl);
   const ch = await conn.createChannel();
   const { exchange } = await ch.assertExchange("test3.input", "direct");
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     url: brokerUrl,
     exchange: { name: "test3.input", type: "direct" },
   });
@@ -78,7 +83,7 @@ test("@amqp The amqp input works as expected on fanout exchanges", async () => {
   const conn = await connect(brokerUrl);
   const ch = await conn.createChannel();
   const { exchange } = await ch.assertExchange("test4.input", "fanout");
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     url: brokerUrl,
     exchange: { name: "test4.input", type: "fanout" },
   });
@@ -106,7 +111,7 @@ test("@amqp The amqp input works as expected on topic exchanges", async () => {
   const conn = await connect(brokerUrl);
   const ch = await conn.createChannel();
   const { exchange } = await ch.assertExchange("test5.input", "topic");
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     url: brokerUrl,
     exchange: { name: "test5.input", type: "topic" },
     "binding-pattern": "test5.*.with-infix-wildcard",

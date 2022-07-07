@@ -2,9 +2,15 @@ import { make as makeEvent } from "../../src/event";
 import { make } from "../../src/step-functions/rename";
 import { consume } from "../test-utils";
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+  stepName: "irrelevant",
+};
+
 test("@standalone Renaming with replacement works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     replace: "replaced",
   });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
@@ -31,7 +37,7 @@ test("@standalone Renaming with replacement works as expected", async () => {
 
 test("@standalone Renaming with prepend works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     prepend: "prefix.",
   });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
@@ -58,7 +64,7 @@ test("@standalone Renaming with prepend works as expected", async () => {
 
 test("@standalone Renaming with append works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     append: ".suffix",
   });
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
@@ -85,7 +91,7 @@ test("@standalone Renaming with append works as expected", async () => {
 
 test("@standalone Renaming with prepend and append works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     prepend: "prefix.",
     append: ".suffix",
   });

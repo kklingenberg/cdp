@@ -24,11 +24,17 @@ const makeSubscriber = async (topic: string, receivedEvents: string[]) => {
   return client;
 };
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+  stepName: "irrelevant",
+};
+
 test("@mqtt Send-mqtt works as expected", async () => {
   // Arrange
   const receivedEvents: string[] = [];
   const client = await makeSubscriber("test1/#", receivedEvents);
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     url: brokerUrl,
     topic: "test1/loremipsum",
   });
@@ -58,7 +64,7 @@ test("@mqtt Send-mqtt works as expected when using jq filters", async () => {
   // Arrange
   const receivedEvents: string[] = [];
   const client = await makeSubscriber("test2/#", receivedEvents);
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     url: brokerUrl,
     topic: "test2/loremipsum",
     "jq-expr": ".[].d",

@@ -2,9 +2,15 @@ import { make as makeEvent } from "../../src/event";
 import { make } from "../../src/step-functions/keep";
 import { consume } from "../test-utils";
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+  stepName: "irrelevant",
+};
+
 test("@standalone Keep works as expected", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", 3);
+  const channel = await make(testParams, 3);
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
     await makeEvent("a", 1, trace),
@@ -28,7 +34,7 @@ test("@standalone Keep works as expected", async () => {
 
 test("@standalone Keep doesn't fail if the incoming event vector has fewer events", async () => {
   // Arrange
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", "3");
+  const channel = await make(testParams, "3");
   const trace = [{ i: 1, p: "irrelevant", h: "irrelevant" }];
   const events = [
     await makeEvent("a", 1, trace),

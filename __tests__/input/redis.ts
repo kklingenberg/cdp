@@ -11,9 +11,14 @@ const testEvents = [
   { n: "baz", d: "bazz" },
 ];
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+};
+
 test("@redis The redis input form builds a one-way channel", async () => {
   // Arrange
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     instance: { path: redisUrl },
     subscribe: ["ignored"],
   });
@@ -28,7 +33,7 @@ test("@redis The redis input form works for single instance, subscribe", async (
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     instance: redisUrl,
     subscribe: ["test1-ignored", "test1", "test1-also-ignored"],
   });
@@ -52,7 +57,7 @@ test("@redis The redis input form works for single instance, psubscribe", async 
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     instance: redisUrl,
     psubscribe: ["test2*"],
   });
@@ -76,7 +81,7 @@ test("@redis The redis input form works for single instance, blpop", async () =>
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     instance: redisUrl,
     blpop: ["test3", "test3-ignored"],
   });
@@ -100,7 +105,7 @@ test("@redis The redis input form works for single instance, brpop", async () =>
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const [channel, stopped] = make("irrelevant", "irrelevant", {
+  const [channel, stopped] = make(testParams, {
     instance: redisUrl,
     brpop: ["test4", "test4-ignored"],
   });

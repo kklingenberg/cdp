@@ -5,6 +5,7 @@ import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
 import { isValidEventName } from "../pattern";
 import { check } from "../utils";
+import { PipelineInputParameters } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -71,20 +72,19 @@ export const validate = (options: GeneratorInputOptions): void => {
  * Creates an input channel that produces events at a fixed rate. It
  * is mainly intended to help with testing pipelines.
  *
- * @param pipelineName The name of the pipeline that will use this
- * input.
- * @param pipelineSignature The signature of the pipeline that will
- * use this input.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The generator options to configure the channel.
  * @returns A channel that produces events at a fixed rate, and a
  * promise that never resolves by itself.
  */
 export const make = (
-  pipelineName: string,
-  pipelineSignature: string,
+  params: PipelineInputParameters,
   options: GeneratorInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
-  const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
+  const eventParser = makeNewEventParser(
+    params.pipelineName,
+    params.pipelineSignature
+  );
   const n =
     options === null
       ? "_"

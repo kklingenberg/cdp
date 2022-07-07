@@ -1,14 +1,14 @@
 import { consume } from "../test-utils";
 import { resolveAfter } from "../../src/utils";
-import { closeInstances, makeChannel } from "../../src/io/jq";
+import { processor } from "../../src/io/jq";
 
 afterEach(() => {
-  closeInstances();
+  processor.closeInstances();
 });
 
 test("@standalone Integration with jq works as expected", async () => {
   // Arrange
-  const { send, receive } = await makeChannel(`{key: join(" ")}`);
+  const { send, receive } = await processor.makeChannel(`{key: join(" ")}`);
   // Act
   send(["foo", "bar", "baz"], ["lorem", "ipsum"]);
   const { value: first } = await receive.next();
@@ -20,7 +20,7 @@ test("@standalone Integration with jq works as expected", async () => {
 
 test("@standalone Failures during processing interrupt parsing of the current payload", async () => {
   // Arrange
-  const { send, receive } = await makeChannel(`.[] | (1 / .)`);
+  const { send, receive } = await processor.makeChannel(`.[] | (1 / .)`);
   // Act
   send([0.5, 0, 0.25], [0.5, 0.25]);
   const { value: first } = await receive.next();
@@ -36,7 +36,7 @@ test("@standalone Failures during processing interrupt parsing of the current pa
 
 test("@standalone Closing a jq channel ends the stream", async () => {
   // Arrange
-  const { send, receive, close } = await makeChannel(".");
+  const { send, receive, close } = await processor.makeChannel(".");
   // Act
   send(1, 2);
   const [valuesBeforeClosing] = await Promise.all([

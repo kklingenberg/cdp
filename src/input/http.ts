@@ -13,10 +13,12 @@ import {
   validateWrap,
 } from "../event";
 import { makeHTTPServer } from "../io/http-server";
-import { isHealthy } from "../io/jq";
+import { processor as jqProcessor } from "../io/jq";
+import { processor as jsonnetProcessor } from "../io/jsonnet";
 import { makeLogger } from "../log";
 import { backpressure } from "../metrics";
 import { check } from "../utils";
+import { PipelineInputParameters } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -79,18 +81,14 @@ export const validate = (options: HTTPInputOptions): void => {
  * Creates an input channel based on data coming from HTTP. Returns a
  * pair of [channel, endPromise].
  *
- * @param pipelineName The name of the pipeline that will use this
- * input.
- * @param pipelineSignature The signature of the pipeline that will
- * use this input.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The HTTP options to configure the input channel.
  * @returns A channel that implicitly receives data from an HTTP
  * endpoint and forwards parsed events, and a promise that resolves
  * when the input ends for any reason.
  */
 export const make = (
-  pipelineName: string,
-  pipelineSignature: string,
+  params: PipelineInputParameters,
   options: HTTPInputOptions
 ): [Channel<never, Event>, Promise<void>] => {
   const parse = chooseParser(
@@ -105,7 +103,10 @@ export const make = (
       ? HTTP_SERVER_DEFAULT_PORT
       : options.port ?? HTTP_SERVER_DEFAULT_PORT;
   const port = typeof rawPort === "string" ? parseInt(rawPort) : rawPort;
-  const eventParser = makeNewEventParser(pipelineName, pipelineSignature);
+  const eventParser = makeNewEventParser(
+    params.pipelineName,
+    params.pipelineSignature
+  );
   const queue = new AsyncQueue<unknown>("input.http");
   const server = makeHTTPServer(port, async (ctx) => {
     logger.debug("Received request:", ctx.request.method, ctx.request.path);
@@ -125,7 +126,7 @@ export const make = (
       ctx.request.path === HTTP_SERVER_HEALTH_ENDPOINT
     ) {
       ctx.type = "application/health+json";
-      if (isHealthy()) {
+      if (jqProcessor.isHealthy() && jsonnetProcessor.isHealthy()) {
         ctx.body = JSON.stringify({ status: "pass" });
       } else {
         logger.warn("Notified unhealthy status");

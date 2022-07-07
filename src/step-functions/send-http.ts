@@ -1,8 +1,10 @@
+import { match, P } from "ts-pattern";
 import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { HTTP_CLIENT_DEFAULT_CONCURRENCY } from "../conf";
 import { Event } from "../event";
+import { check } from "../utils";
 import { sendEvents, sendThing } from "../io/http-client";
-import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters, makeProcessorChannel } from ".";
 
 /**
  * Options for this function.
@@ -12,7 +14,8 @@ export type SendHTTPFunctionOptions =
   | {
       target: string;
       method?: "POST" | "PUT" | "PATCH";
-      ["jq-expr"]?: string;
+      "jq-expr"?: string;
+      "jsonnet-expr"?: string;
       headers?: { [key: string]: string | number | boolean };
       concurrent?: number | string;
     };
@@ -60,27 +63,30 @@ export const optionsSchema = {
  * @param name The name of the step this function belongs to.
  * @param options The options to validate.
  */
-export const validate = (): void => {
-  // Nothing needs to be validated.
+export const validate = (
+  name: string,
+  options: SendHTTPFunctionOptions
+): void => {
+  check(
+    match(options).with(
+      { "jq-expr": P.string, "jsonnet-expr": P.string },
+      () => false
+    ),
+    `step '${name}' can't use both jq and jsonnet expressions simultaneously`
+  );
 };
 
 /**
  * Function that sends events to a remote HTTP endpoint, ignores the
  * response and forwards the events to the pipeline.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to send events to the
  * remote HTTP endpoint.
  * @returns A channel that forwards events via HTTP.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: SendHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const target = typeof options === "string" ? options : options.target;
@@ -93,13 +99,16 @@ export const make = async (
       : typeof options.concurrent === "string"
       ? parseInt(options.concurrent, 10)
       : options.concurrent ?? 10;
-  let forwarder: (events: Event[]) => void;
-  let closeExternal: () => Promise<void>;
+  let passThroughChannel: Channel<Event[], never>;
   const requests = new Array<Promise<void>>(concurrent);
   let i = 0;
-  if (typeof options !== "string" && typeof options["jq-expr"] === "string") {
-    const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"]),
+  if (
+    typeof options !== "string" &&
+    (typeof options["jq-expr"] === "string" ||
+      typeof options["jsonnet-expr"] === "string")
+  ) {
+    passThroughChannel = drain(
+      await makeProcessorChannel(params, options),
       async (response: unknown) => {
         requests[i++] = sendThing(response, target, method, headers);
         if (i === concurrent) {
@@ -111,12 +120,10 @@ export const make = async (
         await Promise.all(requests.slice(0, i));
       }
     );
-    forwarder = jqChannel.send.bind(jqChannel);
-    closeExternal = jqChannel.close.bind(jqChannel);
   } else {
-    const accumulatingChannel: Channel<Event[], never> = drain(
+    passThroughChannel = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.send-http.accumulating`
+        `step.${params.stepName}.send-http.accumulating`
       ).asChannel(),
       async (events: Event[]) => {
         requests[i++] = sendEvents(events, target, method, headers);
@@ -129,19 +136,19 @@ export const make = async (
         await Promise.all(requests.slice(0, i));
       }
     );
-    forwarder = accumulatingChannel.send.bind(accumulatingChannel);
-    closeExternal = accumulatingChannel.close.bind(accumulatingChannel);
   }
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-http.forward`);
+  const queue = new AsyncQueue<Event[]>(
+    `step.${params.stepName}.send-http.forward`
+  );
   const forwardingChannel = flatMap(async (events: Event[]) => {
-    forwarder(events);
+    passThroughChannel.send(events);
     return events;
   }, queue.asChannel());
   return {
     ...forwardingChannel,
     close: async () => {
       await forwardingChannel.close();
-      await closeExternal();
+      await passThroughChannel.close();
     },
   };
 };

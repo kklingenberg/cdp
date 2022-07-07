@@ -1,6 +1,7 @@
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { getSignature } from "../utils";
 import { Event } from "../event";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * Options for this function.
@@ -73,22 +74,16 @@ const deduplicate = async (
 /**
  * Function that removes event duplicates in each batch.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to deduplicate
  * events.
  * @returns A channel that removes event duplicates.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: DeduplicateFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.deduplicate`);
+  const queue = new AsyncQueue<Event[]>(`step.${params.stepName}.deduplicate`);
   const key = [
     options?.["consider-name"] ?? true ? "1" : "0",
     options?.["consider-data"] ?? true ? "1" : "0",

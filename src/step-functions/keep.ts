@@ -1,5 +1,6 @@
 import { Channel, AsyncQueue, flatMap } from "../async-queue";
 import { Event } from "../event";
+import { PipelineStepFunctionParameters } from ".";
 
 /**
  * Options for this function.
@@ -70,19 +71,13 @@ const toInteger = (v: number | string): number =>
  * Function that selects a fixed number of events from each batch, and
  * drops the rest.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate the maximum amount of
  * events to select.
  * @returns A channel that selects events.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: KeepFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const quantity =
@@ -95,7 +90,7 @@ export const make = async (
     typeof options === "string" ||
     typeof options === "number" ||
     "first" in options;
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.keep`);
+  const queue = new AsyncQueue<Event[]>(`step.${params.stepName}.keep`);
   return flatMap(
     (events: Event[]) =>
       Promise.resolve(

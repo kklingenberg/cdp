@@ -6,11 +6,17 @@ import { consume } from "../test-utils";
 
 const redisUrl = "redis://localhost:6379/0";
 
+const testParams = {
+  pipelineName: "irrelevant",
+  pipelineSignature: "irrelevant",
+  stepName: "irrelevant",
+};
+
 test("@redis Send-redis works for single instance, publish", async () => {
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     instance: redisUrl,
     publish: "send-test1",
   });
@@ -38,7 +44,7 @@ test("@redis Send-redis works for single instance, rpush", async () => {
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     instance: redisUrl,
     rpush: "send-test2",
   });
@@ -68,7 +74,7 @@ test("@redis Send-redis works for single instance, lpush", async () => {
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     instance: redisUrl,
     lpush: "send-test3",
   });
@@ -98,7 +104,7 @@ test("@redis Send-redis works in tandem with jq", async () => {
   // Arrange
   const client = new Redis(redisUrl);
   await client.flushall();
-  const channel = await make("irrelevant", "irrelevant", "irrelevant", {
+  const channel = await make(testParams, {
     instance: redisUrl,
     lpush: "send-test4",
     "jq-expr": ".[].d",

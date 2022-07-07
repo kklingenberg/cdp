@@ -1,7 +1,8 @@
+import { match, P } from "ts-pattern";
 import { AsyncQueue, Channel, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
-import { makeChannel } from "../io/jq";
+import { check } from "../utils";
 import {
   connect,
   RedisConnectionOptions,
@@ -9,6 +10,7 @@ import {
   clusterSchema,
   RedisConnection,
 } from "../io/redis";
+import { PipelineStepFunctionParameters, makeProcessorChannel } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -22,7 +24,8 @@ export interface SendRedisFunctionOptions extends RedisConnectionOptions {
   publish?: string;
   rpush?: string;
   lpush?: string;
-  ["jq-expr"]?: string;
+  "jq-expr"?: string;
+  "jsonnet-expr"?: string;
 }
 
 /**
@@ -45,6 +48,7 @@ const buildSchema = (
       minLength: 1,
     },
     "jq-expr": { type: "string", minLength: 1 },
+    "jsonnet-expr": { type: "string", minLength: 1 },
   },
   additionalProperties: false,
   required: [baseKey, key],
@@ -71,8 +75,17 @@ export const optionsSchema = {
  * @param name The name of the step this function belongs to.
  * @param options The options to validate.
  */
-export const validate = (): void => {
-  // Nothing needs to be validated.
+export const validate = (
+  name: string,
+  options: SendRedisFunctionOptions
+): void => {
+  check(
+    match(options).with(
+      { "jq-expr": P.string, "jsonnet-expr": P.string },
+      () => false
+    ),
+    `step '${name}' can't use both jq and jsonnet expressions simultaneously`
+  );
 };
 
 /**
@@ -128,35 +141,29 @@ const sendMessage =
  * Function that sends events to a redis instance, and forwards the
  * same events to the rest of the pipeline unmodified.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to connect and send
  * events to the redis instance.
  * @returns A channel that forwards events to a redis instance.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: SendRedisFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const client: RedisConnection = connect(options);
-  let forwarder: (events: Event[]) => void;
-  let closeExternal: () => Promise<void>;
-  if (typeof options["jq-expr"] === "string") {
-    const jqChannel: Channel<Event[], never> = drain(
-      await makeChannel(options["jq-expr"]),
+  let passThroughChannel: Channel<Event[], never>;
+  if (
+    typeof options["jq-expr"] === "string" ||
+    typeof options["jsonnet-expr"] === "string"
+  ) {
+    passThroughChannel = drain(
+      await makeProcessorChannel(params, options),
       sendMessage(client, options)
     );
-    forwarder = jqChannel.send.bind(jqChannel);
-    closeExternal = jqChannel.close.bind(jqChannel);
   } else {
-    const passThroughChannel: Channel<Event[], never> = drain(
+    passThroughChannel = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.send-redis.pass-through`
+        `step.${params.stepName}.send-redis.pass-through`
       ).asChannel(),
       async (events: Event[]) => {
         await sendMessage(
@@ -165,19 +172,19 @@ export const make = async (
         )(...events.map((event) => event.toJSON()));
       }
     );
-    forwarder = passThroughChannel.send.bind(passThroughChannel);
-    closeExternal = passThroughChannel.close.bind(passThroughChannel);
   }
-  const queue = new AsyncQueue<Event[]>(`step.${stepName}.send-redis.forward`);
+  const queue = new AsyncQueue<Event[]>(
+    `step.${params.stepName}.send-redis.forward`
+  );
   const forwardingChannel = flatMap(async (events: Event[]) => {
-    forwarder(events);
+    passThroughChannel.send(events);
     return events;
   }, queue.asChannel());
   return {
     ...forwardingChannel,
     close: async () => {
       await forwardingChannel.close();
-      await closeExternal();
+      await passThroughChannel.close();
       await client.quit();
     },
   };

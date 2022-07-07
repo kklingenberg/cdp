@@ -22,10 +22,13 @@ import { consume } from "../test-utils";
 
 test("@standalone The poll input form works as expected", async () => {
   // Arrange
-  const [channel] = make("irrelevant", "irrelevant", {
-    target: "http://non-existent.org",
-    seconds: 0.19,
-  });
+  const [channel] = make(
+    { pipelineName: "irrelevant", pipelineSignature: "irrelevant" },
+    {
+      target: "http://non-existent.org",
+      seconds: 0.19,
+    }
+  );
   // Act
   const sent = channel.send();
   const [output] = await Promise.all([

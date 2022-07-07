@@ -5,7 +5,7 @@ import { Event } from "../event";
 import { makeLogger } from "../log";
 import { check, getSignature, mergeHeaders } from "../utils";
 import { makeHTTPServer } from "../io/http-server";
-import { makeChannel } from "../io/jq";
+import { PipelineStepFunctionParameters, makeProcessorChannel } from ".";
 
 /**
  * A logger instance namespaced to this module.
@@ -20,7 +20,8 @@ export type ExposeHTTPFunctionOptions = {
   port: number | string;
   responses: number | string;
   headers?: { [key: string]: string | string[] };
-  ["jq-expr"]?: string;
+  "jq-expr"?: string;
+  "jsonnet-expr"?: string;
 };
 
 /**
@@ -53,6 +54,7 @@ export const optionsSchema = {
       },
     },
     "jq-expr": { type: "string", minLength: 1 },
+    "jsonnet-expr": { type: "string", minLength: 1 },
   },
   additionalProperties: false,
   required: ["endpoint", "port", "responses"],
@@ -69,12 +71,20 @@ export const validate = (
   name: string,
   options: ExposeHTTPFunctionOptions
 ): void => {
+  const matchOptions = match(options);
   check(
-    match(options).with({ port: P.select(P.string) }, (rawPort) =>
+    matchOptions.with({ port: P.select(P.string) }, (rawPort) =>
       ((port) => port >= 1 && port <= 65535)(parseInt(rawPort, 10))
     ),
     `step '${name}' uses an invalid expose-http.port value ` +
       "(must be between 1 and 65535, inclusive)"
+  );
+  check(
+    matchOptions.with(
+      { "jq-expr": P.string, "jsonnet-expr": P.string },
+      () => false
+    ),
+    `step '${name}' can't use both jq and jsonnet expressions simultaneously`
   );
 };
 
@@ -147,19 +157,13 @@ const makeGenericResponse = async (
  * Function that exposes events in an HTTP endpoint, ignores the
  * requests and forwards the events to the pipeline.
  *
- * @param pipelineName The name of the pipeline.
- * @param pipelineSignature The signature of the pipeline.
- * @param stepName The name of the step this function belongs to.
+ * @param params Configuration parameters acquired from the pipeline.
  * @param options The options that indicate how to expose events using
  * HTTP.
  * @returns A channel that exposes events via HTTP.
  */
 export const make = async (
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  pipelineName: string,
-  pipelineSignature: string,
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  stepName: string,
+  params: PipelineStepFunctionParameters,
   options: ExposeHTTPFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const endpoint = options.endpoint.endsWith("/")
@@ -194,9 +198,12 @@ export const make = async (
   };
 
   let responsesChannel: Channel<Event[], never>;
-  if (typeof options["jq-expr"] === "string") {
+  if (
+    typeof options["jq-expr"] === "string" ||
+    typeof options["jsonnet-expr"] === "string"
+  ) {
     responsesChannel = drain(
-      await makeChannel(options["jq-expr"]),
+      await makeProcessorChannel(params, options),
       async (thing: unknown) => {
         const [key, response] = await makeGenericResponse(thing);
         registerResponse(key, response);
@@ -205,7 +212,7 @@ export const make = async (
   } else {
     responsesChannel = drain(
       new AsyncQueue<Event[]>(
-        `step.${stepName}.expoes-http.accumulating`
+        `step.${params.stepName}.expoes-http.accumulating`
       ).asChannel(),
       async (events: Event[]) => {
         const [key, response] = await makeEventWindowResponse(events);
@@ -272,7 +279,7 @@ export const make = async (
   const forwardingChannel = flatMap(async (events: Event[]) => {
     responsesChannel.send(events);
     return events;
-  }, new AsyncQueue<Event[]>(`step.${stepName}.expose-http.forward`).asChannel());
+  }, new AsyncQueue<Event[]>(`step.${params.stepName}.expose-http.forward`).asChannel());
   return {
     ...forwardingChannel,
     close: async () => {
