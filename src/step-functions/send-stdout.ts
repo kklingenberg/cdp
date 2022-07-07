@@ -76,7 +76,7 @@ export const make = async (
         const flushed = stdout.write(
           (typeof result === "string" ? result : JSON.stringify(result)) + "\n"
         );
-        if (!flushed && !closed.value()) {
+        if (!flushed) {
           await closed.guard((resolve) => stdout.once("drain", resolve));
         }
       }
@@ -89,7 +89,7 @@ export const make = async (
       async (events: Event[]) => {
         for (const event of events) {
           const flushed = stdout.write(JSON.stringify(event) + "\n");
-          if (!flushed && !closed.value()) {
+          if (!flushed) {
             await closed.guard((resolve) => stdout.once("drain", resolve));
           }
         }

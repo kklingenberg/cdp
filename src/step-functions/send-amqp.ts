@@ -210,7 +210,7 @@ export const make = async (
           "with routing key",
           routingKey
         );
-        if (!flushed && !closed.value()) {
+        if (!flushed) {
           await closed.guard((resolve) => ch.once("drain", resolve));
         }
       }
@@ -239,7 +239,7 @@ export const make = async (
           "with routing key",
           routingKey
         );
-        if (!flushed && !closed.value()) {
+        if (!flushed) {
           await closed.guard((resolve) => ch.once("drain", resolve));
         }
       }

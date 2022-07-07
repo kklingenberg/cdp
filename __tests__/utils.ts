@@ -64,13 +64,13 @@ test("@standalone Fuses can guard a single executor at a time", async () => {
   await openFuse.guard((resolve) => setTimeout(resolve, 200));
   await openFuse.guard((resolve) => setTimeout(resolve, 200));
   // Multiple guards work if the fuse is triggered in-between guards.
-  const guarded = triggeredFuse.guard((resolve) => {
+  const guarded = triggeredFuse.guard(() => {
     // Never resolve
   });
   triggeredFuse.trigger();
   await Promise.all([
     guarded,
-    triggeredFuse.guard((resolve) => {
+    triggeredFuse.guard(() => {
       // Never resolve
     }),
   ]);

@@ -163,9 +163,6 @@ export class Processor<Options extends ProcessorOptions = ProcessorOptions> {
     ).asChannel();
     const feedEnded: Promise<void> = (async () => {
       for await (const value of bufferChannel.receive) {
-        if (closedIndependently.value()) {
-          continue;
-        }
         const flushed = child.stdin.write(JSON.stringify(value) + "\n");
         if (!flushed) {
           await closedIndependently.guard((resolve) =>
