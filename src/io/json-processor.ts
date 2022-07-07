@@ -5,6 +5,9 @@ import { AsyncQueue, Channel } from "../async-queue";
 import { PATH } from "../conf";
 import { parseJson } from "./read-stream";
 
+/**
+ * Minimum options passed to Processor#makeChannel.
+ */
 export interface ProcessorOptions {
   parse?: (stream: Readable, limit?: number) => AsyncGenerator<unknown>;
 }
@@ -138,32 +141,44 @@ export class Processor<Options extends ProcessorOptions = ProcessorOptions> {
     child.on("error", (err) => {
       onError(err);
     });
-    await precondition;
+    let closedIndependently = false;
+    child.stdin.on("close", () => {
+      closedIndependently = true;
+    });
     const parseStream = options?.parse ?? parseJson;
-    const bufferChannel: Channel<T, T> = new AsyncQueue<T>(
-      `io.${this.program}.buffer`
-    ).asChannel();
-    const feedEnded: Promise<void> = (async () => {
-      for await (const value of bufferChannel.receive) {
-        const flushed = child.stdin.write(JSON.stringify(value) + "\n");
-        if (!flushed) {
-          await new Promise((resolve) => child.stdin.once("drain", resolve));
-        }
-      }
-    })();
     let notifyEnded: () => void;
     const ended: Promise<void> = new Promise((resolve) => {
       notifyEnded = resolve;
     });
-    async function* receive() {
+    async function* receiver() {
       for await (const result of parseStream(child.stdout)) {
         yield result;
       }
       notifyEnded();
     }
+    const receive = receiver();
+    await precondition;
+
+    const bufferChannel: Channel<T, T> = new AsyncQueue<T>(
+      `io.${this.program}.buffer`
+    ).asChannel();
+    const feedEnded: Promise<void> = (async () => {
+      for await (const value of bufferChannel.receive) {
+        if (closedIndependently) {
+          continue;
+        }
+        const flushed = child.stdin.write(JSON.stringify(value) + "\n");
+        if (!flushed && !closedIndependently) {
+          await Promise.race([
+            new Promise((resolve) => child.stdin.once("drain", resolve)),
+            new Promise((resolve) => child.stdin.once("close", resolve)),
+          ]);
+        }
+      }
+    })();
     return {
       send: (...items: T[]) => bufferChannel.send(...items),
-      receive: receive(),
+      receive,
       close: async () => {
         await bufferChannel.close();
         await feedEnded;

@@ -166,7 +166,11 @@ export const make = async (
   const conn = await connect(options.url);
   conn.on("error", (err) => logger.error(`Error on AMQP connection: ${err}`));
   const ch = await conn.createChannel();
+  let closed = false;
   ch.on("error", (err) => logger.error(`Error on AMQP channel: ${err}`));
+  ch.on("close", () => {
+    closed = true;
+  });
   const { exchange } = await ch.assertExchange(
     options.exchange?.name ?? DEFAULT_EXCHANGE_NAME,
     options.exchange?.type ?? DEFAULT_EXCHANGE_TYPE,
@@ -208,8 +212,11 @@ export const make = async (
           "with routing key",
           routingKey
         );
-        if (!flushed) {
-          await new Promise((resolve) => ch.once("drain", resolve));
+        if (!flushed && !closed) {
+          await Promise.race([
+            new Promise((resolve) => ch.once("drain", resolve)),
+            new Promise((resolve) => ch.once("close", resolve)),
+          ]);
         }
       }
     );
@@ -237,7 +244,7 @@ export const make = async (
           "with routing key",
           routingKey
         );
-        if (!flushed) {
+        if (!flushed && !closed) {
           await new Promise((resolve) => ch.once("drain", resolve));
         }
       }

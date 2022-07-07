@@ -66,6 +66,10 @@ export const make = async (
   options: SendSTDOUTFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const stdout = getSTDOUT();
+  let closed = false;
+  stdout.on("close", () => {
+    closed = true;
+  });
   let passThroughChannel: Channel<Event[], never>;
   if (options !== null && typeof options["jq-expr"] === "string") {
     passThroughChannel = drain(
@@ -74,7 +78,7 @@ export const make = async (
         const flushed = stdout.write(
           (typeof result === "string" ? result : JSON.stringify(result)) + "\n"
         );
-        if (!flushed) {
+        if (!flushed && !closed) {
           await new Promise((resolve) => stdout.once("drain", resolve));
         }
       }
@@ -87,8 +91,11 @@ export const make = async (
       async (events: Event[]) => {
         for (const event of events) {
           const flushed = stdout.write(JSON.stringify(event) + "\n");
-          if (!flushed) {
-            await new Promise((resolve) => stdout.once("drain", resolve));
+          if (!flushed && !closed) {
+            await Promise.race([
+              new Promise((resolve) => stdout.once("drain", resolve)),
+              new Promise((resolve) => stdout.once("close", resolve)),
+            ]);
           }
         }
       }
