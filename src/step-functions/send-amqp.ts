@@ -3,7 +3,7 @@ import { match, P } from "ts-pattern";
 import { AsyncQueue, Channel, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
 import { makeLogger } from "../log";
-import { check } from "../utils";
+import { check, makeFuse } from "../utils";
 import { PipelineStepFunctionParameters, makeProcessorChannel } from ".";
 
 /**
@@ -166,11 +166,9 @@ export const make = async (
   const conn = await connect(options.url);
   conn.on("error", (err) => logger.error(`Error on AMQP connection: ${err}`));
   const ch = await conn.createChannel();
-  let closed = false;
   ch.on("error", (err) => logger.error(`Error on AMQP channel: ${err}`));
-  ch.on("close", () => {
-    closed = true;
-  });
+  const closed = makeFuse();
+  ch.on("close", () => closed.trigger());
   const { exchange } = await ch.assertExchange(
     options.exchange?.name ?? DEFAULT_EXCHANGE_NAME,
     options.exchange?.type ?? DEFAULT_EXCHANGE_TYPE,
@@ -212,11 +210,8 @@ export const make = async (
           "with routing key",
           routingKey
         );
-        if (!flushed && !closed) {
-          await Promise.race([
-            new Promise((resolve) => ch.once("drain", resolve)),
-            new Promise((resolve) => ch.once("close", resolve)),
-          ]);
+        if (!flushed) {
+          await closed.guard((resolve) => ch.once("drain", resolve));
         }
       }
     );
@@ -244,8 +239,8 @@ export const make = async (
           "with routing key",
           routingKey
         );
-        if (!flushed && !closed) {
-          await new Promise((resolve) => ch.once("drain", resolve));
+        if (!flushed) {
+          await closed.guard((resolve) => ch.once("drain", resolve));
         }
       }
     );

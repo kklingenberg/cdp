@@ -1,7 +1,7 @@
 import { match, P } from "ts-pattern";
 import { Channel, AsyncQueue, flatMap, drain } from "../async-queue";
 import { Event } from "../event";
-import { check } from "../utils";
+import { check, makeFuse } from "../utils";
 import { getSTDOUT } from "../io/stdio";
 import { PipelineStepFunctionParameters, makeProcessorChannel } from ".";
 
@@ -66,10 +66,8 @@ export const make = async (
   options: SendSTDOUTFunctionOptions
 ): Promise<Channel<Event[], Event>> => {
   const stdout = getSTDOUT();
-  let closed = false;
-  stdout.on("close", () => {
-    closed = true;
-  });
+  const closed = makeFuse();
+  stdout.on("close", () => closed.trigger());
   let passThroughChannel: Channel<Event[], never>;
   if (options !== null && typeof options["jq-expr"] === "string") {
     passThroughChannel = drain(
@@ -78,8 +76,8 @@ export const make = async (
         const flushed = stdout.write(
           (typeof result === "string" ? result : JSON.stringify(result)) + "\n"
         );
-        if (!flushed && !closed) {
-          await new Promise((resolve) => stdout.once("drain", resolve));
+        if (!flushed) {
+          await closed.guard((resolve) => stdout.once("drain", resolve));
         }
       }
     );
@@ -91,11 +89,8 @@ export const make = async (
       async (events: Event[]) => {
         for (const event of events) {
           const flushed = stdout.write(JSON.stringify(event) + "\n");
-          if (!flushed && !closed) {
-            await Promise.race([
-              new Promise((resolve) => stdout.once("drain", resolve)),
-              new Promise((resolve) => stdout.once("close", resolve)),
-            ]);
+          if (!flushed) {
+            await closed.guard((resolve) => stdout.once("drain", resolve));
           }
         }
       }

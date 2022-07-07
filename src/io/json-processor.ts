@@ -3,6 +3,7 @@ import { accessSync, constants, statSync } from "fs";
 import { Readable } from "stream";
 import { AsyncQueue, Channel } from "../async-queue";
 import { PATH } from "../conf";
+import { makeFuse } from "../utils";
 import { parseJson } from "./read-stream";
 
 /**
@@ -141,10 +142,8 @@ export class Processor<Options extends ProcessorOptions = ProcessorOptions> {
     child.on("error", (err) => {
       onError(err);
     });
-    let closedIndependently = false;
-    child.stdin.on("close", () => {
-      closedIndependently = true;
-    });
+    const closedIndependently = makeFuse();
+    child.stdin.on("close", () => closedIndependently.trigger());
     const parseStream = options?.parse ?? parseJson;
     let notifyEnded: () => void;
     const ended: Promise<void> = new Promise((resolve) => {
@@ -164,15 +163,11 @@ export class Processor<Options extends ProcessorOptions = ProcessorOptions> {
     ).asChannel();
     const feedEnded: Promise<void> = (async () => {
       for await (const value of bufferChannel.receive) {
-        if (closedIndependently) {
-          continue;
-        }
         const flushed = child.stdin.write(JSON.stringify(value) + "\n");
-        if (!flushed && !closedIndependently) {
-          await Promise.race([
-            new Promise((resolve) => child.stdin.once("drain", resolve)),
-            new Promise((resolve) => child.stdin.once("close", resolve)),
-          ]);
+        if (!flushed) {
+          await closedIndependently.guard((resolve) =>
+            child.stdin.once("drain", resolve)
+          );
         }
       }
     })();

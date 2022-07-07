@@ -54,3 +54,31 @@ test("@standalone Environment variables can be replaced in objects", () => {
     "": "this one does, although it may cause trouble",
   });
 });
+
+test("@standalone Fuses can guard a single executor at a time", async () => {
+  // Arrange
+  const openFuse = utils.makeFuse();
+  const triggeredFuse = utils.makeFuse();
+  // Act & assert
+  // Simple guards work if awaited
+  await openFuse.guard((resolve) => setTimeout(resolve, 200));
+  await openFuse.guard((resolve) => setTimeout(resolve, 200));
+  // Multiple guards work if the fuse is triggered in-between guards.
+  const guarded = triggeredFuse.guard(() => {
+    // Never resolve
+  });
+  triggeredFuse.trigger();
+  await Promise.all([
+    guarded,
+    triggeredFuse.guard(() => {
+      // Never resolve
+    }),
+  ]);
+  // Multiple guards fail if awaited on in parallel.
+  await expect(
+    Promise.all([
+      openFuse.guard((resolve) => setTimeout(resolve, 200)),
+      openFuse.guard((resolve) => setTimeout(resolve, 200)),
+    ])
+  ).rejects.toThrow("a previous guard is still in place");
+});
