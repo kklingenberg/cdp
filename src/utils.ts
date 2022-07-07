@@ -143,32 +143,43 @@ export const mergeHeaders = <T>(
   );
 
 /**
- * Make a fuse, which is a boolean flag started at `false` in three
+ * Make a fuse, which is a boolean flag started at `false` in four
  * flavours: a getter method for the current value, a setter method to
- * set it to `true`, and a promise that resolves once the setter is
- * called. A fuse can only be set to `true` once.
+ * set it to `true`, a promise that resolves once the setter is
+ * called, and a `guard` promise constructor that behaves similarly to
+ * `new Promise()` but short-circuiting resolution once the fuse turns
+ * to `true`. A fuse can only be set to `true` once.
  *
  * @returns A new fuse.
  */
 export const makeFuse = () => {
   let flag = false;
   let notify: () => void;
-  const promise = (
-    new Promise((resolve) => {
-      notify = resolve;
-    }) as Promise<void>
-  ).then(() => {
-    flag = true;
-  });
+  let guardNotify: (() => void) | null = null;
+  const promise = new Promise((resolve) => {
+    notify = resolve;
+  }) as Promise<void>;
   return {
     value: () => flag,
-    trigger: () =>
-      (
-        notify ??
-        (() => {
-          // Oops, triggered before it's ready.
-        })
-      )(),
+    trigger: () => {
+      flag = true;
+      notify();
+      if (guardNotify !== null) {
+        guardNotify();
+      }
+    },
     promise,
+    guard: (executor: (resolve: () => void) => void): Promise<void> =>
+      flag
+        ? Promise.resolve()
+        : guardNotify !== null
+        ? Promise.reject(new Error("a previous guard is still in place"))
+        : (new Promise((resolve) => {
+            guardNotify = resolve;
+            executor(() => {
+              guardNotify = null;
+              resolve();
+            });
+          }) as Promise<void>),
   };
 };
