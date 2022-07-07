@@ -1,6 +1,6 @@
 {
   "name": "cdp",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Composable Data Pipelines",
   "main": "src/index.ts",
   "scripts": {
@@ -20,9 +20,13 @@
   },
   "keywords": [
     "jq",
+    "jsonnet",
     "pipeline",
     "async",
-    "dag"
+    "dag",
+    "amqp",
+    "mqtt",
+    "redis"
   ],
   "author": "Kai Klingenberg",
   "license": "ISC",
@@ -34,8 +38,8 @@
     "@types/amqplib": "^0.8.2",
     "@types/jest": "^27.5.2",
     "@types/koa": "^2.13.4",
-    "@typescript-eslint/eslint-plugin": "^5.30.3",
-    "@typescript-eslint/parser": "^5.30.3",
+    "@typescript-eslint/eslint-plugin": "^5.30.5",
+    "@typescript-eslint/parser": "^5.30.5",
     "esbuild": "^0.14.48",
     "eslint": "^8.19.0",
     "jest": "^27.5.1",
@@ -53,7 +57,7 @@
     "mqtt": "^4.3.7",
     "prom-client": "^14.0.1",
     "tail-file": "^1.4.15",
-    "ts-pattern": "^4.0.3",
+    "ts-pattern": "^4.0.4",
     "yaml": "^1.10.2"
   }
 }
