@@ -1,3 +1,11 @@
+# Download jq static binary
+FROM alpine:3.16.0 AS downloader
+
+RUN wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 -O /bin/jq && \
+    chmod +x /bin/jq
+
+
+# Build stream-jsonnet, a jq look-alike static binary
 FROM golang:1.18-alpine AS golangbuilder
 
 WORKDIR /src
@@ -5,26 +13,26 @@ COPY stream-jsonnet .
 RUN go build
 
 
-FROM node:16-alpine AS nodejsbuilder
+# Build CDP itself
+FROM rust:1.62.0-slim-bullseye AS rustbuilder
 
-RUN wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 -O /bin/jq && \
-    chmod +x /bin/jq
+COPY --from=downloader /bin/jq /bin/jq
 COPY --from=golangbuilder /src/stream-jsonnet /bin/stream-jsonnet
 
-WORKDIR /src
-COPY package.json package-lock.json ./
-RUN npm install
+WORKDIR /usr/src/app
 
-COPY . .
-RUN npm run check-and-build
+RUN cargo init --bin
+COPY cdp/Cargo.toml cdp/Cargo.lock ./
+RUN cargo build --release
+
+COPY cdp .
+RUN cargo test && cargo build --release
 
 
-FROM alpine:3.15
+# Integrate CDP with jq and stream-jsonnet into a lean base image
+FROM gcr.io/distroless/cc-debian11
 
-WORKDIR /src
-RUN apk add --update --no-cache 'nodejs<17'
-COPY --from=nodejsbuilder /src/build/index.js index.js
-COPY --from=nodejsbuilder /bin/jq /bin/jq
-COPY --from=golangbuilder /src/stream-jsonnet /bin/stream-jsonnet
-
-ENTRYPOINT ["node", "/src/index.js"]
+COPY --from=downloader /bin/jq /usr/bin/jq
+COPY --from=golangbuilder /src/stream-jsonnet /usr/bin/stream-jsonnet
+COPY --from=rustbuilder /usr/src/app/target/release/cdp /usr/bin/cdp
+ENTRYPOINT ["/usr/bin/cdp"]

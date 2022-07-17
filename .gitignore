@@ -1,6 +1,4 @@
-node_modules
-build
-coverage
 .cli
 stream-jsonnet/stream-jsonnet
+cdp/target
 *~
