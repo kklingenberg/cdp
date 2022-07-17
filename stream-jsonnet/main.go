@@ -40,6 +40,7 @@ func main() {
 	// Process each line as input.
 	jsonnetVM := jsonnet.MakeVM()
 	reader := bufio.NewReader(os.Stdin)
+	var compacted bytes.Buffer
 	for {
 		switch line, err := reader.ReadString('\n'); err {
 		case nil:
@@ -53,7 +54,7 @@ func main() {
 				// to jq filters.
 				fmt.Fprintln(os.Stderr, err)
 			} else {
-				var compacted bytes.Buffer
+				compacted.Reset()
 				json.Compact(&compacted, []byte(output))
 				compacted.Write([]byte("\n"))
 				compacted.WriteTo(os.Stdout)
