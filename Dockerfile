@@ -14,7 +14,7 @@ RUN go build
 
 
 # Build CDP itself
-FROM rust:1.62.0-slim-bullseye AS rustbuilder
+FROM rust:1.62.1-slim-bullseye AS rustbuilder
 
 COPY --from=downloader /bin/jq /bin/jq
 COPY --from=golangbuilder /src/stream-jsonnet /bin/stream-jsonnet

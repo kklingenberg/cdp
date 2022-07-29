@@ -1,3 +1,6 @@
+mod conf;
+
 fn main() {
-    println!("Hello, world!");
+    let conf = conf::init().unwrap();
+    println!("Hello, world! log level is {}", conf.log_level);
 }
